@@ -69,3 +69,42 @@ return data
 except Exception as e:
 print(f"❌ Error downloading data for {ticker}: {e}")
 return pd.DataFrame()
+
+# ============================
+# Function: get_financials
+# ============================
+def get_financials(ticker: str) -> pd.DataFrame:
+"""
+Retrieves key financial statement data (revenues, EPS, net income, etc.)
+using yfinance's financials and earnings attributes.
+
+
+Parameters
+----------
+ticker : str
+The stock ticker symbol.
+
+
+Returns
+-------
+pd.DataFrame
+Combined DataFrame with key metrics (revenue, net income, EPS).
+"""
+try:
+company = yf.Ticker(ticker)
+financials = company.financials.T # Income statement (transposed)
+earnings = company.earnings # Annual earnings summary
+
+
+# Merge data and clean
+df = financials.merge(earnings, left_index=True, right_index=True, how='outer')
+df.reset_index(inplace=True)
+df.rename(columns={'index': 'Year'}, inplace=True)
+
+
+df.to_csv(os.path.join(DATA_DIR, f"{ticker}_financials.csv"), index=False)
+print(f"✅ Financial data for {ticker} saved successfully.")
+return df
+except Exception as e:
+print(f"❌ Error retrieving financial data for {ticker}: {e}")
+return pd.DataFrame()
