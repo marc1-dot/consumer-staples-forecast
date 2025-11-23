@@ -127,3 +127,11 @@ if not price_data.empty and not fin_data.empty:
 print(f"✅ Completed data retrieval for {name}.")
 else:
 print(f"⚠️ Partial data for {name}.")
+
+# ============================
+# Main script execution
+# ============================
+if __name__ == "__main__":
+print("\n🚀 Starting data collection for Consumer Staples Forecasting Project...\n")
+fetch_all_data()
+print("\n🎯 All data successfully downloaded and saved in the 'data/' folder.")
