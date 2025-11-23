@@ -14,6 +14,21 @@ Course: Advanced Programming - HEC Lausanne (Fall 2025)
 # ============================
 # Import required libraries
 # ============================
+
 import yfinance as yf # Yahoo Finance API for market data
 import pandas as pd # Data manipulation
 import os # File management
+
+# ============================
+# Configuration
+# ============================
+
+# Define the tickers for major Consumer Staples companies
+
+TICKERS = {
+'Nestle': 'NESN.SW',
+'Procter & Gamble': 'PG',
+'Unilever': 'UL',
+'Coca-Cola': 'KO',
+'PepsiCo': 'PEP'
+}
