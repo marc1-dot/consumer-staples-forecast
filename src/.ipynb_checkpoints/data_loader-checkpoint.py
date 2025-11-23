@@ -108,3 +108,22 @@ return df
 except Exception as e:
 print(f"❌ Error retrieving financial data for {ticker}: {e}")
 return pd.DataFrame()
+
+# ============================
+# Function: fetch_all_data
+# ============================
+def fetch_all_data():
+"""
+Iterates through all company tickers, downloads both market and financial data,
+and stores them in the data/ folder.
+"""
+for name, ticker in TICKERS.items():
+print(f"\n📊 Fetching data for {name} ({ticker})...")
+price_data = download_stock_data(ticker)
+fin_data = get_financials(ticker)
+
+
+if not price_data.empty and not fin_data.empty:
+print(f"✅ Completed data retrieval for {name}.")
+else:
+print(f"⚠️ Partial data for {name}.")
