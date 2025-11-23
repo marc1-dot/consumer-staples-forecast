@@ -1,3 +1,7 @@
+### Machine Learning–Based Forecasting of Financial Performance and Market Valuation in the Consumer Staples Sector
+
+
+
 ### Problem Statement and Motivation
  The consumer staples sector, which includes companies producing essential goods such as food,
  beverages, and household products, represents one of the most stable and resilient segments of the
