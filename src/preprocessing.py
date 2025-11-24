@@ -105,3 +105,47 @@ def handle_missing_values(df: pd.DataFrame) -> pd.DataFrame:
 
         df = df.dropna(subset=['Close']) # Ensure target variable is complete
     return df
+
+# ============================
+# Function: create_features
+# ============================
+def create_features(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Creates derived features from price and financial data.
+    
+    
+    Generated features include:
+    - Daily returns
+    - Rolling volatility (30 days)
+    - Year-over-year revenue and EPS growth
+    
+    
+    Parameters
+    ----------
+    df : pd.DataFrame
+    Clean dataset with both price and fundamental variables.
+    
+    
+    Returns
+    -------
+    pd.DataFrame
+    Dataset enriched with engineered features.
+    """
+    df = df.sort_values('Date')
+    
+    
+    # Market-based features
+    df['Return'] = df['Close'].pct_change()
+    df['Volatility_30d'] = df['Return'].rolling(window=30).std()
+    
+    
+    # Financial growth features
+    if 'Total Revenue' in df.columns:
+        df['Revenue_Growth'] = df['Total Revenue'].pct_change()
+    if 'Earnings' in df.columns:
+        df['Earnings_Growth'] = df['Earnings'].pct_change()
+    
+    
+    # Drop early NaNs
+    df = df.dropna().reset_index(drop=True)
+    return df
