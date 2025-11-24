@@ -188,3 +188,13 @@ def preprocess_all(tickers: list):
         print(f"✅ Preprocessing complete. Data saved to {save_path}")
     else:
         print("❌ No valid data to process.")
+# ============================
+# Main script execution
+# ============================
+if __name__ == "__main__":
+    from data_loader import TICKERS
+
+
+    print("\n🚀 Starting preprocessing pipeline...\n")
+    preprocess_all(list(TICKERS.values()))
+    print("\n🎯 All company data cleaned and saved in the 'processed/' folder.")
