@@ -69,3 +69,39 @@ def load_company_data(ticker: str) -> pd.DataFrame:
 
 
     return merged
+
+# ============================
+# Function: handle_missing_values
+# ============================
+def handle_missing_values(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Handles missing financial values and fills gaps logically.
+    
+    
+    Strategy:
+    - EPS, Revenue, Net Income: forward-fill (to propagate last known values).
+    - Remaining NaNs: replaced by median (robust imputation).
+    
+    
+    Parameters
+    ----------
+    df : pd.DataFrame
+    The combined dataset with missing values.
+    
+    
+    Returns
+    -------
+    pd.DataFrame
+    Cleaned dataset ready for feature engineering.
+    """
+    fill_cols = ['Earnings', 'Revenue', 'Net Income', 'EPS']
+
+
+    for col in fill_cols:
+        if col in df.columns:
+            df[col] = df[col].fillna(method='ffill').fillna(method='bfill')
+            df[col] = df[col].fillna(df[col].median())
+
+
+        df = df.dropna(subset=['Close']) # Ensure target variable is complete
+    return df
