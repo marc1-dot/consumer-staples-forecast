@@ -149,3 +149,42 @@ def create_features(df: pd.DataFrame) -> pd.DataFrame:
     # Drop early NaNs
     df = df.dropna().reset_index(drop=True)
     return df
+
+# ============================
+# Function: preprocess_all
+# ============================
+def preprocess_all(tickers: list):
+    """
+    Processes all tickers: load, clean, feature engineer, and save.
+    
+    
+    Parameters
+    ----------
+    tickers : list
+    List of tickers to preprocess.
+    """
+    combined_data = []
+    
+    
+    for ticker in tickers:
+        print(f"\n⚙️ Preprocessing {ticker}...")
+        df = load_company_data(ticker)
+        if df.empty:
+            continue
+    
+    
+    df = handle_missing_values(df)
+    df = create_features(df)
+    df['Ticker'] = ticker
+    
+    
+    combined_data.append(df)
+    
+    
+    if combined_data:
+        final_df = pd.concat(combined_data, ignore_index=True)
+        save_path = os.path.join(PROCESSED_DIR, 'combined_data.csv')
+        final_df.to_csv(save_path, index=False)
+        print(f"✅ Preprocessing complete. Data saved to {save_path}")
+    else:
+        print("❌ No valid data to process.")
