@@ -77,8 +77,7 @@ if 'Year' not in fin_df.columns:
 merged = pd.merge(price_df, fin_df, on='Year', how='left')
 
 
-
-    return merged
+return merged
 
 # ============================
 # Function: handle_missing_values
