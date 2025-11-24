@@ -65,7 +65,17 @@ def load_company_data(ticker: str) -> pd.DataFrame:
 
 
     # Merge financial data by year
-    merged = pd.merge(price_df, fin_df, left_on='Year', right_on='Year', how='left')
+    # Ensure 'Year' column exists in financials
+if 'Year' not in fin_df.columns:
+    if 'index' in fin_df.columns:
+        fin_df.rename(columns={'index': 'Year'}, inplace=True)
+    else:
+        fin_df.reset_index(inplace=True)
+        fin_df.rename(columns={'index': 'Year'}, inplace=True)
+
+# Merge financial data by year
+merged = pd.merge(price_df, fin_df, on='Year', how='left')
+
 
 
     return merged
