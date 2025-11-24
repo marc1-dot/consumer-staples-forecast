@@ -31,53 +31,35 @@ os.makedirs(PROCESSED_DIR, exist_ok=True)
 # ============================
 def load_company_data(ticker: str) -> pd.DataFrame:
     """
-    Loads price and financial data for a specific ticker from CSV files,
-    merges them on date/year, and aligns financial indicators with prices.
-    
-    
-    Parameters
-    ----------
-    ticker : str
-    The stock ticker symbol.
-    
-    
-    Returns
-    -------
-    pd.DataFrame
-    Combined DataFrame containing both market and financial data.
+    Loads and merges price and financial data for a specific company.
     """
     price_path = os.path.join(DATA_DIR, f"{ticker}_prices.csv")
     fin_path = os.path.join(DATA_DIR, f"{ticker}_financials.csv")
-    
-    
+
     if not os.path.exists(price_path) or not os.path.exists(fin_path):
-        print(f"⚠️ Missing data for {ticker}, skipping...")
+        print(f"⚠️ Missing data files for {ticker}. Skipping.")
         return pd.DataFrame()
 
-
+    # Load data
     price_df = pd.read_csv(price_path)
     fin_df = pd.read_csv(fin_path)
 
+    # Convert date to year in price data
+    price_df['Year'] = pd.to_datetime(price_df['Date']).dt.year
 
-    # Convert date columns
-    price_df['Date'] = pd.to_datetime(price_df['Date'])
-    price_df['Year'] = price_df['Date'].dt.year
-
+    # Ensure 'Year' column exists in financials
+    if 'Year' not in fin_df.columns:
+        if 'index' in fin_df.columns:
+            fin_df.rename(columns={'index': 'Year'}, inplace=True)
+        else:
+            fin_df.reset_index(inplace=True)
+            fin_df.rename(columns={'index': 'Year'}, inplace=True)
 
     # Merge financial data by year
-    # Ensure 'Year' column exists in financials
-if 'Year' not in fin_df.columns:
-    if 'index' in fin_df.columns:
-        fin_df.rename(columns={'index': 'Year'}, inplace=True)
-    else:
-        fin_df.reset_index(inplace=True)
-        fin_df.rename(columns={'index': 'Year'}, inplace=True)
+    merged = pd.merge(price_df, fin_df, on='Year', how='left')
 
-# Merge financial data by year
-merged = pd.merge(price_df, fin_df, on='Year', how='left')
+    return merged
 
-
-return merged
 
 # ============================
 # Function: handle_missing_values
