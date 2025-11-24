@@ -17,3 +17,11 @@ Course: Advanced Programming - HEC Lausanne (Fall 2025)
 import os
 import pandas as pd
 import numpy as np
+
+# ============================
+# Configuration
+# ============================
+# Define directories
+DATA_DIR = os.path.join(os.path.dirname(__file__), '..', 'data')
+PROCESSED_DIR = os.path.join(os.path.dirname(__file__), '..', 'processed')
+os.makedirs(PROCESSED_DIR, exist_ok=True)
