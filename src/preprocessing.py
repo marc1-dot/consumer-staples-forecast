@@ -91,22 +91,32 @@ def create_features(df: pd.DataFrame) -> pd.DataFrame:
             print("⚠️ Skipping: 'Date' column not found.")
             return df
 
+    # ✅ Convertir toutes les colonnes numériques possibles
+    numeric_cols = ['Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume',
+                    'Total Revenue', 'Net Income', 'EPS']
+    for col in numeric_cols:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+
     df = df.sort_values('Date')
 
     # Market-based features
-    df['Return'] = df['Close'].pct_change()
-    df['Volatility_30d'] = df['Return'].rolling(window=30).std()
+    if 'Close' in df.columns:
+        df['Return'] = df['Close'].pct_change()
+        df['Volatility_30d'] = df['Return'].rolling(window=30).std()
 
-    # Financial growth features
-    if 'Total Revenue' in df.columns:
-        df['Revenue_Growth'] = df['Total Revenue'].pct_change()
-    if 'Earnings' in df.columns:
-        df['Earnings_Growth'] = df['Earnings'].pct_change()
+    # Financial growth
+    for col in ['Total Revenue', 'Net Income', 'EPS']:
+        if col in df.columns:
+            df[f'{col}_Growth'] = df[col].pct_change()
 
+    # Price-to-Earnings ratio (when both available)
+    if 'Close' in df.columns and 'EPS' in df.columns:
+        df['PE_Ratio'] = df['Close'] / df['EPS'].replace(0, np.nan)
+
+    # Nettoyage final
     df = df.dropna().reset_index(drop=True)
     return df
-
-
 # ============================
 # Function: preprocess_all
 # ============================
