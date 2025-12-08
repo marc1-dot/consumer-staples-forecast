@@ -150,41 +150,52 @@ def create_features(df: pd.DataFrame) -> pd.DataFrame:
 # ============================
 # Function: preprocess_all
 # ============================
-def preprocess_all(tickers: list):
+def create_features(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Processes all tickers: load, clean, feature engineer, and save.
-    
-    
+    Creates derived features from price and financial data.
+
+    Generated features include:
+    - Daily returns
+    - Rolling volatility (30 days)
+    - Year-over-year revenue and EPS growth
+
     Parameters
     ----------
-    tickers : list
-    List of tickers to preprocess.
+    df : pd.DataFrame
+        Clean dataset with both price and fundamental variables.
+
+    Returns
+    -------
+    pd.DataFrame
+        Dataset enriched with engineered features.
     """
-    combined_data = []
-    
-    
-    for ticker in tickers:
-        print(f"\n⚙️ Preprocessing {ticker}...")
-        df = load_company_data(ticker)
-        if df.empty:
-            continue
-    
-    
-    df = handle_missing_values(df)
-    df = create_features(df)
-    df['Ticker'] = ticker
-    
-    
-    combined_data.append(df)
-    
-    
-    if combined_data:
-        final_df = pd.concat(combined_data, ignore_index=True)
-        save_path = os.path.join(PROCESSED_DIR, 'combined_data.csv')
-        final_df.to_csv(save_path, index=False)
-        print(f"✅ Preprocessing complete. Data saved to {save_path}")
-    else:
-        print("❌ No valid data to process.")
+
+    # ✅ Vérifie que la colonne 'Date' existe
+    if 'Date' not in df.columns:
+        if 'date' in df.columns:
+            df.rename(columns={'date': 'Date'}, inplace=True)
+        else:
+            print("⚠️ Skipping: 'Date' column not found.")
+            return df
+
+    # Tri par date
+    df = df.sort_values('Date')
+
+    # Market-based features
+    df['Return'] = df['Close'].pct_change()
+    df['Volatility_30d'] = df['Return'].rolling(window=30).std()
+
+    # Financial growth features
+    if 'Total Revenue' in df.columns:
+        df['Revenue_Growth'] = df['Total Revenue'].pct_change()
+    if 'Earnings' in df.columns:
+        df['Earnings_Growth'] = df['Earnings'].pct_change()
+
+    # Drop early NaNs
+    df = df.dropna().reset_index(drop=True)
+
+    return df
+
 # ============================
 # Main script execution
 # ============================
