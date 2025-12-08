@@ -5,11 +5,9 @@ This script prepares and cleans the data collected by `data_loader.py`.
 It merges price data and financial statement data, handles missing values
 (including EPS gaps before 2019), and creates derived features for modeling.
 
-
 Author: Marc Birchler
 Course: Advanced Programming - HEC Lausanne (Fall 2025)
 """
-
 
 # ============================
 # Import required libraries
@@ -67,35 +65,17 @@ def load_company_data(ticker: str) -> pd.DataFrame:
 def handle_missing_values(df: pd.DataFrame) -> pd.DataFrame:
     """
     Handles missing financial values and fills gaps logically.
-    
-    
-    Strategy:
-    - EPS, Revenue, Net Income: forward-fill (to propagate last known values).
-    - Remaining NaNs: replaced by median (robust imputation).
-    
-    
-    Parameters
-    ----------
-    df : pd.DataFrame
-    The combined dataset with missing values.
-    
-    
-    Returns
-    -------
-    pd.DataFrame
-    Cleaned dataset ready for feature engineering.
     """
     fill_cols = ['Earnings', 'Revenue', 'Net Income', 'EPS']
-
 
     for col in fill_cols:
         if col in df.columns:
             df[col] = df[col].fillna(method='ffill').fillna(method='bfill')
             df[col] = df[col].fillna(df[col].median())
 
-
-        df = df.dropna(subset=['Close']) # Ensure target variable is complete
+    df = df.dropna(subset=['Close'])  # Ensure target variable is complete
     return df
+
 
 # ============================
 # Function: create_features
@@ -103,24 +83,7 @@ def handle_missing_values(df: pd.DataFrame) -> pd.DataFrame:
 def create_features(df: pd.DataFrame) -> pd.DataFrame:
     """
     Creates derived features from price and financial data.
-
-    Generated features include:
-    - Daily returns
-    - Rolling volatility (30 days)
-    - Year-over-year revenue and EPS growth
-
-    Parameters
-    ----------
-    df : pd.DataFrame
-        Clean dataset with both price and fundamental variables.
-
-    Returns
-    -------
-    pd.DataFrame
-        Dataset enriched with engineered features.
     """
-
-    # ✅ Vérifie que la colonne 'Date' existe
     if 'Date' not in df.columns:
         if 'date' in df.columns:
             df.rename(columns={'date': 'Date'}, inplace=True)
@@ -128,7 +91,6 @@ def create_features(df: pd.DataFrame) -> pd.DataFrame:
             print("⚠️ Skipping: 'Date' column not found.")
             return df
 
-    # Tri par date
     df = df.sort_values('Date')
 
     # Market-based features
@@ -141,67 +103,51 @@ def create_features(df: pd.DataFrame) -> pd.DataFrame:
     if 'Earnings' in df.columns:
         df['Earnings_Growth'] = df['Earnings'].pct_change()
 
-    # Drop early NaNs
     df = df.dropna().reset_index(drop=True)
-
     return df
 
 
 # ============================
 # Function: preprocess_all
 # ============================
-def create_features(df: pd.DataFrame) -> pd.DataFrame:
+def preprocess_all(tickers: list):
     """
-    Creates derived features from price and financial data.
-
-    Generated features include:
-    - Daily returns
-    - Rolling volatility (30 days)
-    - Year-over-year revenue and EPS growth
-
-    Parameters
-    ----------
-    df : pd.DataFrame
-        Clean dataset with both price and fundamental variables.
-
-    Returns
-    -------
-    pd.DataFrame
-        Dataset enriched with engineered features.
+    Processes all companies’ data and saves a combined dataset.
     """
+    all_data = []
 
-    # ✅ Vérifie que la colonne 'Date' existe
-    if 'Date' not in df.columns:
-        if 'date' in df.columns:
-            df.rename(columns={'date': 'Date'}, inplace=True)
-        else:
-            print("⚠️ Skipping: 'Date' column not found.")
-            return df
+    for ticker in tickers:
+        print(f"\n⚙️ Preprocessing {ticker}...")
+        df = load_company_data(ticker)
+        if df.empty:
+            print(f"⚠️ Skipping {ticker}: no merged data available.")
+            continue
 
-    # Tri par date
-    df = df.sort_values('Date')
+        # Handle missing values
+        df = handle_missing_values(df)
 
-    # Market-based features
-    df['Return'] = df['Close'].pct_change()
-    df['Volatility_30d'] = df['Return'].rolling(window=30).std()
+        # Add the ticker as a new column
+        df['Ticker'] = ticker
 
-    # Financial growth features
-    if 'Total Revenue' in df.columns:
-        df['Revenue_Growth'] = df['Total Revenue'].pct_change()
-    if 'Earnings' in df.columns:
-        df['Earnings_Growth'] = df['Earnings'].pct_change()
+        # Create derived features
+        df = create_features(df)
+        if not df.empty:
+            all_data.append(df)
 
-    # Drop early NaNs
-    df = df.dropna().reset_index(drop=True)
+    # Combine all companies
+    if all_data:
+        combined = pd.concat(all_data, ignore_index=True)
+        combined.to_csv(os.path.join(PROCESSED_DIR, "combined_data.csv"), index=False)
+        print(f"✅ Preprocessing complete. Data saved to {os.path.join(PROCESSED_DIR, 'combined_data.csv')}")
+    else:
+        print("❌ No data processed — check input files.")
 
-    return df
 
 # ============================
 # Main script execution
 # ============================
 if __name__ == "__main__":
     from data_loader import TICKERS
-
 
     print("\n🚀 Starting preprocessing pipeline...\n")
     preprocess_all(list(TICKERS.values()))
