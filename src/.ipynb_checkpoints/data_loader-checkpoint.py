@@ -3,6 +3,7 @@ data_loader.py
 ----------------
 Downloads market data (daily prices) and financial statement data (income, EPS, etc.)
 for Consumer Staples companies using yfinance.
+Also retrieves key macroeconomic indicators (US 10-Year Treasury yield and CPI inflation).
 
 Author: Marc Birchler
 Course: Advanced Programming - HEC Lausanne (Fall 2025)
@@ -11,6 +12,7 @@ Course: Advanced Programming - HEC Lausanne (Fall 2025)
 import yfinance as yf
 import pandas as pd
 import os
+from datetime import datetime
 
 # ============================
 # Configuration
@@ -70,6 +72,43 @@ def get_financials(ticker: str) -> pd.DataFrame:
     print(f"✅ Saved financial data for {ticker}")
     return df
 
+
+# ============================
+# Download macroeconomic data
+# ============================
+def get_macro_data(start='2020-01-01', end=None) -> pd.DataFrame:
+    """
+    Downloads key macroeconomic indicators:
+    - US 10-Year Treasury Yield (^TNX)
+    - US Inflation Rate (CPI)
+    """
+
+    if end is None:
+        end = datetime.today().strftime('%Y-%m-%d')
+
+    macro_series = {
+        'US10Y_Yield': '^TNX',      # 10-Year Treasury Yield
+        'US_CPI': 'CPI'             # Consumer Price Index (Inflation proxy)
+    }
+
+    macro_df = pd.DataFrame()
+
+    for name, ticker in macro_series.items():
+        print(f"📈 Fetching {name} ({ticker})...")
+        data = yf.download(ticker, start=start, end=end)[['Close']]
+        data.rename(columns={'Close': name}, inplace=True)
+        if macro_df.empty:
+            macro_df = data
+        else:
+            macro_df = macro_df.join(data, how='outer')
+
+    macro_df.reset_index(inplace=True)
+    macro_df.to_csv(os.path.join(DATA_DIR, 'macro_data.csv'), index=False)
+    print(f"✅ Saved macroeconomic data to macro_data.csv")
+
+    return macro_df
+
+
 # ============================
 # Fetch all data
 # ============================
@@ -79,6 +118,15 @@ def fetch_all_data():
         download_stock_data(ticker)
         get_financials(ticker)
 
+    # Fetch macro data (5 latest years)
+    print("\n🌍 Fetching macroeconomic indicators (US10Y & CPI)...")
+    get_macro_data(start='2020-01-01')
+    print("✅ Macroeconomic data collected successfully.")
+
+
+# ============================
+# Main
+# ============================
 if __name__ == "__main__":
     print("\n🚀 Collecting financial & market data...\n")
     fetch_all_data()
