@@ -1,16 +1,17 @@
 """
 preprocessing.py
 ----------------
-This script prepares and cleans the data collected by `data_loader.py`.
-It merges price data and financial statement data, handles missing values
-(including EPS gaps before 2019), and creates derived features for modeling.
+Preprocesses and cleans the data collected by `data_loader.py`.
+It merges price data, financial statement data, and macroeconomic indicators.
+Handles missing values (including EPS gaps before 2019)
+and creates engineered features for modeling.
 
 Author: Marc Birchler
 Course: Advanced Programming - HEC Lausanne (Fall 2025)
 """
 
 # ============================
-# Import required libraries
+# Imports
 # ============================
 import os
 import pandas as pd
@@ -19,146 +20,156 @@ import numpy as np
 # ============================
 # Configuration
 # ============================
-# Define directories
 DATA_DIR = os.path.join(os.path.dirname(__file__), '..', 'data')
 PROCESSED_DIR = os.path.join(os.path.dirname(__file__), '..', 'processed')
 os.makedirs(PROCESSED_DIR, exist_ok=True)
 
+
 # ============================
-# Function: load_company_data
+# Load and merge price + financial data
 # ============================
 def load_company_data(ticker: str) -> pd.DataFrame:
-    """
-    Loads and merges price and financial data for a specific company.
-    """
+    """Loads and merges stock price and financial data for a company."""
     price_path = os.path.join(DATA_DIR, f"{ticker}_prices.csv")
     fin_path = os.path.join(DATA_DIR, f"{ticker}_financials.csv")
 
     if not os.path.exists(price_path) or not os.path.exists(fin_path):
-        print(f"⚠️ Missing data files for {ticker}. Skipping.")
+        print(f"⚠️ Missing data for {ticker}. Skipping.")
         return pd.DataFrame()
 
     # Load data
     price_df = pd.read_csv(price_path)
     fin_df = pd.read_csv(fin_path)
 
-    # Convert date to year in price data
-    price_df['Year'] = pd.to_datetime(price_df['Date']).dt.year
+    # Convert Date to datetime and extract Year
+    price_df['Date'] = pd.to_datetime(price_df['Date'], errors='coerce')
+    price_df['Year'] = price_df['Date'].dt.year
 
-    # Ensure 'Year' column exists in financials
+    # ✅ Convert numeric columns to float (fix for the 'str' error)
+    numeric_cols = ['Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume']
+    for col in numeric_cols:
+        if col in price_df.columns:
+            price_df[col] = pd.to_numeric(price_df[col], errors='coerce')
+
+    # Ensure Year column exists in financials
     if 'Year' not in fin_df.columns:
-        if 'index' in fin_df.columns:
-            fin_df.rename(columns={'index': 'Year'}, inplace=True)
-        else:
-            fin_df.reset_index(inplace=True)
-            fin_df.rename(columns={'index': 'Year'}, inplace=True)
+        fin_df.reset_index(inplace=True)
+        fin_df.rename(columns={'index': 'Year'}, inplace=True)
 
-    # Merge financial data by year
+    # Merge on Year
     merged = pd.merge(price_df, fin_df, on='Year', how='left')
 
+    # Drop any rows missing 'Close' price (useless for analysis)
+    merged = merged.dropna(subset=['Close'])
+
     return merged
-
-
 # ============================
-# Function: handle_missing_values
+# Handle missing values
 # ============================
 def handle_missing_values(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Handles missing financial values and fills gaps logically.
-    """
+    """Fills missing financial data and cleans dataset."""
     fill_cols = ['Earnings', 'Revenue', 'Net Income', 'EPS']
 
     for col in fill_cols:
         if col in df.columns:
-            df[col] = df[col].fillna(method='ffill').fillna(method='bfill')
+            df[col] = df[col].ffill().bfill()
             df[col] = df[col].fillna(df[col].median())
 
-    df = df.dropna(subset=['Close'])  # Ensure target variable is complete
+    # Drop rows where the main price column is missing
+    df = df.dropna(subset=['Close'])
     return df
 
 
 # ============================
-# Function: create_features
+# Create derived features
 # ============================
 def create_features(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Creates derived features from price and financial data.
-    """
+    """Creates engineered features like returns and growth rates."""
     if 'Date' not in df.columns:
-        if 'date' in df.columns:
-            df.rename(columns={'date': 'Date'}, inplace=True)
-        else:
-            print("⚠️ Skipping: 'Date' column not found.")
-            return df
-
-    # ✅ Convertir toutes les colonnes numériques possibles
-    numeric_cols = ['Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume',
-                    'Total Revenue', 'Net Income', 'EPS']
-    for col in numeric_cols:
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors='coerce')
+        print("⚠️ Skipping feature creation: missing 'Date' column.")
+        return df
 
     df = df.sort_values('Date')
 
     # Market-based features
-    if 'Close' in df.columns:
-        df['Return'] = df['Close'].pct_change()
-        df['Volatility_30d'] = df['Return'].rolling(window=30).std()
+    df['Return'] = df['Close'].pct_change()
+    df['Volatility_30d'] = df['Return'].rolling(window=30).std()
 
-    # Financial growth
-    for col in ['Total Revenue', 'Net Income', 'EPS']:
-        if col in df.columns:
-            df[f'{col}_Growth'] = df[col].pct_change()
+    # Financial growth features
+    if 'Total Revenue' in df.columns:
+        df['Revenue_Growth'] = df['Total Revenue'].pct_change()
+    if 'Earnings' in df.columns:
+        df['Earnings_Growth'] = df['Earnings'].pct_change()
+    if 'EPS' in df.columns:
+        df['EPS_Growth'] = df['EPS'].pct_change()
+    if 'Net Income' in df.columns:
+        df['Net_Income_Growth'] = df['Net Income'].pct_change()
 
-    # Price-to-Earnings ratio (when both available)
-    if 'Close' in df.columns and 'EPS' in df.columns:
-        df['PE_Ratio'] = df['Close'] / df['EPS'].replace(0, np.nan)
-
-    # Nettoyage final
+    # Clean
     df = df.dropna().reset_index(drop=True)
     return df
+
+
 # ============================
-# Function: preprocess_all
+# Add macroeconomic indicators
+# ============================
+def merge_macro_data(df: pd.DataFrame) -> pd.DataFrame:
+    """Merges company data with macroeconomic indicators by date."""
+    macro_path = os.path.join(DATA_DIR, "macro_data.csv")
+
+    if not os.path.exists(macro_path):
+        print("⚠️ No macroeconomic data found. Skipping merge.")
+        return df
+
+    macro_df = pd.read_csv(macro_path)
+    macro_df['Date'] = pd.to_datetime(macro_df['Date'])
+
+    # Merge by date
+    merged_df = pd.merge(df, macro_df, on='Date', how='left')
+
+    # Forward-fill missing macro data
+    merged_df[['US10Y_Yield', 'US_CPI']] = merged_df[['US10Y_Yield', 'US_CPI']].ffill().bfill()
+
+    print("✅ Macroeconomic data merged successfully.")
+    return merged_df
+
+
+# ============================
+# Full preprocessing pipeline
 # ============================
 def preprocess_all(tickers: list):
-    """
-    Processes all companies’ data and saves a combined dataset.
-    """
     all_data = []
 
     for ticker in tickers:
         print(f"\n⚙️ Preprocessing {ticker}...")
+
         df = load_company_data(ticker)
         if df.empty:
-            print(f"⚠️ Skipping {ticker}: no merged data available.")
             continue
 
-        # Handle missing values
         df = handle_missing_values(df)
-
-        # Add the ticker as a new column
-        df['Ticker'] = ticker
-
-        # Create derived features
         df = create_features(df)
-        if not df.empty:
-            all_data.append(df)
+        df = merge_macro_data(df)
 
-    # Combine all companies
-    if all_data:
-        combined = pd.concat(all_data, ignore_index=True)
-        combined.to_csv(os.path.join(PROCESSED_DIR, "combined_data.csv"), index=False)
-        print(f"✅ Preprocessing complete. Data saved to {os.path.join(PROCESSED_DIR, 'combined_data.csv')}")
-    else:
-        print("❌ No data processed — check input files.")
+        all_data.append(df)
+
+    # Combine all company data
+    if not all_data:
+        print("❌ No data processed.")
+        return
+
+    combined = pd.concat(all_data, ignore_index=True)
+    combined.to_csv(os.path.join(PROCESSED_DIR, "combined_data.csv"), index=False)
+
+    print(f"✅ Preprocessing complete. Data saved to {PROCESSED_DIR}/combined_data.csv")
 
 
 # ============================
-# Main script execution
+# Main
 # ============================
 if __name__ == "__main__":
     from data_loader import TICKERS
 
     print("\n🚀 Starting preprocessing pipeline...\n")
     preprocess_all(list(TICKERS.values()))
-    print("\n🎯 All company data cleaned and saved in the 'processed/' folder.")
+    print("\n🎯 All company + macro data cleaned and saved in 'processed/' folder.")
