@@ -1,12 +1,10 @@
 """
 models.py
 ---------
-This module handles the machine learning modeling for the
-Consumer Staples Forecasting project.
+Machine Learning modeling for the Consumer Staples Forecasting project.
 
-It loads the preprocessed data, splits it into training and testing sets,
-trains baseline models (starting with Linear Regression), and saves them
-for future evaluation and comparison.
+This version includes both baseline (micro-only) and macro-enriched models.
+It compares their performance and saves both models for future evaluation.
 
 Author: Marc Birchler
 Course: Advanced Programming - HEC Lausanne (Fall 2025)
@@ -21,12 +19,11 @@ import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
-import joblib  # to save models
+import joblib
 
 # ============================
 # Configuration
 # ============================
-# Paths
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 DATA_PATH = os.path.join(BASE_DIR, "processed", "combined_data.csv")
 MODEL_DIR = os.path.join(BASE_DIR, "models")
@@ -36,13 +33,13 @@ os.makedirs(MODEL_DIR, exist_ok=True)
 # Function: load_data
 # ============================
 def load_data() -> pd.DataFrame:
-    """Loads the preprocessed dataset for modeling."""
+    """Loads and cleans the preprocessed dataset."""
     if not os.path.exists(DATA_PATH):
         raise FileNotFoundError(f"❌ Processed data not found at {DATA_PATH}")
 
     df = pd.read_csv(DATA_PATH)
 
-    # Ensure numerical columns
+    # Convert all numeric columns and drop missing
     df = df.select_dtypes(include=[np.number]).dropna()
 
     print(f"✅ Loaded dataset with shape: {df.shape}")
@@ -51,56 +48,52 @@ def load_data() -> pd.DataFrame:
 # ============================
 # Function: prepare_data
 # ============================
-def prepare_data(df: pd.DataFrame):
-    """Prepares features (X) and target (y) for modeling."""
+def prepare_data(df: pd.DataFrame, include_macro: bool = False):
+    """
+    Prepares features (X) and target (y) for modeling.
 
-    # Target variable: we predict next-day return (or price if missing)
+    Parameters
+    ----------
+    include_macro : bool
+        If True, includes macroeconomic variables (US10Y_Yield, US_CPI)
+    """
     target_col = "Return" if "Return" in df.columns else "Close"
 
+    # Select features
     X = df.drop(columns=[target_col], errors='ignore')
     y = df[target_col]
 
-    # Split dataset (80% train, 20% test)
+    if not include_macro:
+        X = X.drop(columns=[col for col in X.columns if "US" in col], errors='ignore')
+
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42, shuffle=False
     )
 
-    print(f"✅ Data split: {X_train.shape[0]} train rows, {X_test.shape[0]} test rows")
+    mode = "with macros" if include_macro else "micro-only"
+    print(f"✅ Data prepared ({mode}): {X_train.shape[1]} features, {X_train.shape[0]} train rows")
     return X_train, X_test, y_train, y_test
 
 # ============================
-# Function: train_linear_regression
+# Model training & evaluation
 # ============================
 def train_linear_regression(X_train, y_train):
-    """Trains a baseline Linear Regression model."""
     model = LinearRegression()
     model.fit(X_train, y_train)
-    print("✅ Linear Regression model trained successfully.")
     return model
 
-# ============================
-# Function: evaluate_model
-# ============================
-def evaluate_model(model, X_test, y_test):
-    """Evaluates a trained model and prints performance metrics."""
+def evaluate_model(model, X_test, y_test, label="Model"):
     preds = model.predict(X_test)
-
     mae = mean_absolute_error(y_test, preds)
     rmse = np.sqrt(mean_squared_error(y_test, preds))
     r2 = r2_score(y_test, preds)
-
-    print("\n📊 Model Evaluation Results:")
+    print(f"\n📊 {label} Evaluation:")
     print(f"   - MAE  : {mae:.4f}")
     print(f"   - RMSE : {rmse:.4f}")
     print(f"   - R²   : {r2:.4f}")
-
     return {"MAE": mae, "RMSE": rmse, "R2": r2}
 
-# ============================
-# Function: save_model
-# ============================
-def save_model(model, filename="linear_regression.pkl"):
-    """Saves a trained model to the models directory."""
+def save_model(model, filename):
     model_path = os.path.join(MODEL_DIR, filename)
     joblib.dump(model, model_path)
     print(f"💾 Model saved at: {model_path}")
@@ -111,20 +104,18 @@ def save_model(model, filename="linear_regression.pkl"):
 if __name__ == "__main__":
     print("\n🚀 Starting model training pipeline...\n")
 
-    # Step 1: Load data
     df = load_data()
 
-    # Step 2: Prepare data
-    X_train, X_test, y_train, y_test = prepare_data(df)
+    # --- Model 1: Baseline (micro variables only)
+    X_train, X_test, y_train, y_test = prepare_data(df, include_macro=False)
+    model_micro = train_linear_regression(X_train, y_train)
+    metrics_micro = evaluate_model(model_micro, X_test, y_test, label="Baseline (Micro only)")
+    save_model(model_micro, "linear_regression_micro.pkl")
 
-    # Step 3: Train model
-    model = train_linear_regression(X_train, y_train)
+    # --- Model 2: Macro-enriched
+    X_train_m, X_test_m, y_train_m, y_test_m = prepare_data(df, include_macro=True)
+    model_macro = train_linear_regression(X_train_m, y_train_m)
+    metrics_macro = evaluate_model(model_macro, X_test_m, y_test_m, label="Macro-Enriched")
+    save_model(model_macro, "linear_regression_macro.pkl")
 
-    # Step 4: Evaluate model
-    metrics = evaluate_model(model, X_test, y_test)
-
-    # Step 5: Save model
-    save_model(model)
-
-    print("\n🎯 Baseline model training complete and saved successfully.\n")
-
+    print("\n🎯 Model training complete. Both versions saved successfully.\n")
