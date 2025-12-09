@@ -114,25 +114,49 @@ def create_features(df: pd.DataFrame) -> pd.DataFrame:
 # Add macroeconomic indicators
 # ============================
 def merge_macro_data(df: pd.DataFrame) -> pd.DataFrame:
-    """Merges company data with macroeconomic indicators by date."""
+    """
+    Merges company data with macroeconomic indicators (US10Y, CPI)
+    using nearest date matching.
+    Handles null or invalid dates in the macro dataset.
+    """
     macro_path = os.path.join(DATA_DIR, "macro_data.csv")
 
     if not os.path.exists(macro_path):
         print("⚠️ No macroeconomic data found. Skipping merge.")
         return df
 
+    # Load and clean macro data
     macro_df = pd.read_csv(macro_path)
-    macro_df['Date'] = pd.to_datetime(macro_df['Date'])
+    macro_df['Date'] = pd.to_datetime(macro_df['Date'], errors='coerce')
 
-    # Merge by date
-    merged_df = pd.merge(df, macro_df, on='Date', how='left')
+    # ✅ Remove invalid or missing dates
+    macro_df = macro_df.dropna(subset=['Date'])
 
-    # Forward-fill missing macro data
+    # ✅ Ensure numeric types
+    for col in ['US10Y_Yield', 'US_CPI']:
+        if col in macro_df.columns:
+            macro_df[col] = pd.to_numeric(macro_df[col], errors='coerce')
+
+    # Sort both datasets
+    df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
+    df = df.dropna(subset=['Date'])
+    df = df.sort_values('Date')
+    macro_df = macro_df.sort_values('Date')
+
+    # ✅ Use merge_asof for time-based alignment
+    merged_df = pd.merge_asof(
+        df,
+        macro_df,
+        on='Date',
+        direction='backward',  # Use most recent macro data available
+        tolerance=pd.Timedelta("60D")  # Allow up to 60 days gap
+    )
+
+    # Fill missing macro values
     merged_df[['US10Y_Yield', 'US_CPI']] = merged_df[['US10Y_Yield', 'US_CPI']].ffill().bfill()
 
     print("✅ Macroeconomic data merged successfully.")
     return merged_df
-
 
 # ============================
 # Full preprocessing pipeline
