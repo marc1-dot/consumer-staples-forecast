@@ -99,40 +99,56 @@ def create_features(df: pd.DataFrame) -> pd.DataFrame:
 # Merge with macroeconomic data
 # ============================
 def merge_macro_data(df: pd.DataFrame) -> pd.DataFrame:
-    macro_path = os.path.join(DATA_DIR, "macro_data.csv")
+    """
+    Merge the company data with macroeconomic indicators (10Y yield + CPI).
+    """
 
+    macro_path = os.path.join(DATA_DIR, "macro_data.csv")
     if not os.path.exists(macro_path):
         print("⚠️ No macroeconomic data found. Skipping merge.")
         return df
 
-    macro_df = pd.read_csv(macro_path)
+    # --- Load macro data safely (skip junk rows)
+    with open(macro_path, "r") as f:
+        lines = f.readlines()
+
+    # Remove the problematic 2nd line (e.g., ",^TNX,CPI")
+    if len(lines) > 1 and not lines[1].startswith("202"):
+        lines.pop(1)
+
+    clean_path = os.path.join(DATA_DIR, "macro_data_clean.csv")
+    with open(clean_path, "w") as f:
+        f.writelines(lines)
+
+    macro_df = pd.read_csv(clean_path)
+    print(f"📁 Loaded cleaned macro data with {len(macro_df)} rows.")
+
+    # --- Clean and ensure numeric types
     macro_df['Date'] = pd.to_datetime(macro_df['Date'], errors='coerce')
-    macro_df = macro_df.dropna(subset=['Date'])
-    macro_df = macro_df.sort_values('Date')
+    macro_df = macro_df.dropna(subset=['Date']).sort_values('Date')
 
-    # Ensure numeric types
     for col in ['US10Y_Yield', 'US_CPI']:
-        if col in macro_df.columns:
-            macro_df[col] = pd.to_numeric(macro_df[col], errors='coerce')
+        macro_df[col] = pd.to_numeric(macro_df[col], errors='coerce')
 
+    # --- Prepare company df
     df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
     df = df.dropna(subset=['Date']).sort_values('Date')
 
+    # --- Merge
     merged_df = pd.merge_asof(
         df,
         macro_df,
         on='Date',
-        direction='backward',
-        tolerance=pd.Timedelta("60D")
+        direction='backward'
     )
 
     merged_df[['US10Y_Yield', 'US_CPI']] = merged_df[['US10Y_Yield', 'US_CPI']].ffill().bfill()
 
     print("✅ Macroeconomic data merged successfully.")
-    print("📊 Macro sample:\n", merged_df[['Date', 'US10Y_Yield', 'US_CPI']].tail(3))
+    print("🔍 Last 5 macro rows in merged data:")
+    print(merged_df[['Date', 'US10Y_Yield', 'US_CPI']].tail(5))
+
     return merged_df
-
-
 # ============================
 # Main preprocessing pipeline
 # ============================
