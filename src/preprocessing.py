@@ -9,14 +9,10 @@ Author: Marc Birchler
 Course: Advanced Programming - HEC Lausanne (Fall 2025)
 """
 
-# ============================
-# Imports
-# ============================
 import os
 import pandas as pd
 import numpy as np
 from data_loader import TICKERS
-
 
 # ============================
 # Configuration
@@ -42,42 +38,50 @@ def load_company_data(ticker: str) -> pd.DataFrame:
     price_df = pd.read_csv(price_path)
     fin_df = pd.read_csv(fin_path)
 
-    # Clean and align on year
+    # Convert 'Date' column to datetime safely
     price_df['Date'] = pd.to_datetime(price_df['Date'], errors='coerce')
     price_df['Year'] = price_df['Date'].dt.year
 
+    # Ensure financials have a 'Year' column
     if 'Year' not in fin_df.columns:
         fin_df.reset_index(inplace=True)
         fin_df.rename(columns={'index': 'Year'}, inplace=True)
 
+    # Merge by year
     merged = pd.merge(price_df, fin_df, on='Year', how='left')
     merged['Ticker'] = ticker
     return merged
 
 
 def handle_missing_values(df: pd.DataFrame) -> pd.DataFrame:
-    """Fills missing values for key columns."""
+    """Fills missing values for financial columns."""
     for col in ['EPS', 'Net Income', 'Total Revenue']:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce').ffill().bfill()
-    df = df.dropna(subset=['Close'])
-    return df
+    return df.dropna(subset=['Close'])
 
 
 def create_features(df: pd.DataFrame) -> pd.DataFrame:
     """Creates return and volatility features using Close prices."""
     df = df.sort_values('Date')
+
+    # Ensure numeric columns
     df['Close'] = pd.to_numeric(df['Close'], errors='coerce')
     df['Volume'] = pd.to_numeric(df['Volume'], errors='coerce')
 
+    # Remove rows where Close is missing
+    df = df.dropna(subset=['Close'])
+
+    # Compute daily return and rolling volatility
     df['Return'] = df['Close'].pct_change()
-    df['Volatility_30d'] = df['Return'].rolling(window=30).std()
+    df['Volatility_30d'] = df['Return'].rolling(window=30, min_periods=5).std()
+
     return df
 
 
 def merge_macro_data(df: pd.DataFrame) -> pd.DataFrame:
     """Merges macroeconomic data (US yields and inflation) with company data."""
-    macro_path = os.path.join(DATA_DIR, "macro_data_clean.csv")
+    macro_path = os.path.join(DATA_DIR, "macro_data.csv")
     if not os.path.exists(macro_path):
         print("⚠️ No macro data file found.")
         return df
@@ -90,7 +94,7 @@ def merge_macro_data(df: pd.DataFrame) -> pd.DataFrame:
     df = df.dropna(subset=['Date']).sort_values('Date')
 
     merged = pd.merge_asof(df, macro_df, on='Date', direction='backward')
-    print(f"✅ Macro data merged for {merged['Date'].dt.year.min()}–{merged['Date'].dt.year.max()} ({len(merged)} rows)")
+    print(f"✅ Macro data merged ({len(merged)} rows).")
     return merged
 
 
@@ -112,11 +116,11 @@ def convert_to_weekly(df: pd.DataFrame) -> pd.DataFrame:
         'Total Revenue': 'last' if 'Total Revenue' in df.columns else 'first'
     }).reset_index()
 
-    # Compute weekly return based on Close
+    # Compute weekly return
     weekly['Weekly_Return'] = weekly['Close'].pct_change()
     weekly = weekly.dropna(subset=['Close'])
 
-    print(f"📅 Converted to weekly data ({len(weekly)} rows, ending on {weekly['Date'].max().date()})")
+    print(f"📅 Converted to weekly ({len(weekly)} rows, ending {weekly['Date'].max().date()})")
     return weekly
 
 
@@ -138,7 +142,6 @@ def preprocess_all(tickers):
         df = convert_to_weekly(df)
         df['Ticker'] = ticker
 
-        # ✅ Keep only relevant columns (no Open, High, Low)
         df = df[
             [
                 'Close', 'Volume', 'Return', 'Volatility_30d',
@@ -155,14 +158,13 @@ def preprocess_all(tickers):
 
     combined = pd.concat(all_data, ignore_index=True)
     combined.to_csv(os.path.join(PROCESSED_DIR, "combined_data.csv"), index=False)
-
-    print(f"✅ All tickers processed into weekly data. Final shape: {combined.shape}")
+    print(f"✅ All tickers processed. Final shape: {combined.shape}")
 
 
 # ============================
 # Execution
 # ============================
 if __name__ == "__main__":
-    print("\n🚀 Starting full weekly preprocessing pipeline...\n")
+    print("\n🚀 Starting full preprocessing pipeline...\n")
     preprocess_all(list(TICKERS.values()))
-    print("\n🎯 All data converted to weekly and saved in 'processed/combined_data.csv'\n")
+    print("\n🎯 All data converted and saved in processed/combined_data.csv\n")
