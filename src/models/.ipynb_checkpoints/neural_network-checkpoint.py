@@ -1,44 +1,45 @@
 """
 neural_network.py
 -----------------
-Train an optimized feed-forward neural network (MLP) to predict weekly stock returns.
-Includes normalization, early stopping, and a compact architecture for small datasets.
-
-Author: Marc Birchler
-Course: Advanced Programming - HEC Lausanne (Fall 2025)
+Neural Network model with proper feature scaling.
 """
 
 from sklearn.neural_network import MLPRegressor
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
 
+
 def train_neural_network(X_train, y_train):
     """
-    Trains a compact and stable Multi-Layer Perceptron (feed-forward neural network).
-    - Scales inputs for gradient stability
-    - Uses smaller architecture to prevent overfitting
-    - Implements early stopping based on validation loss
+    Train a Neural Network with standardized features.
+    
+    Args:
+        X_train: Training features
+        y_train: Training target
+    
+    Returns:
+        Trained pipeline (scaler + model)
     """
-
-    # Build the pipeline: Scaling + Neural Network
+    
+    # Create pipeline with scaling
     model = Pipeline([
-        ("scaler", StandardScaler()),
-        ("mlp", MLPRegressor(
-            hidden_layer_sizes=(16, 8),     # simpler architecture → better generalization
-            activation="relu",
-            solver="adam",
-            learning_rate_init=0.0005,      # slower, more stable learning
-            max_iter=300,                   # fewer iterations (enough for convergence)
-            early_stopping=True,            # stops when validation score stops improving
-            validation_fraction=0.1,        # 10% of training data used for validation
-            alpha=0.001,                    # L2 regularization to reduce overfitting
+        ('scaler', StandardScaler()),
+        ('mlp', MLPRegressor(
+            hidden_layer_sizes=(128, 64, 32),
+            activation='relu',
+            solver='adam',
+            alpha=0.001,
+            learning_rate_init=0.001,
+            max_iter=1000,
+            early_stopping=True,
+            validation_fraction=0.2,
+            n_iter_no_change=50,
             random_state=42,
             verbose=False
         ))
     ])
-
-    # Train the model
+    
     model.fit(X_train, y_train)
-
-    print("✅ Optimized Neural Network model trained successfully.")
+    
+    print("✅ Neural Network trained with feature scaling.")
     return model

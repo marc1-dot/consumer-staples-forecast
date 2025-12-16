@@ -2,34 +2,23 @@
 train_all.py
 -------------
 Trains all models (LinearRegression, RandomForest, XGBoost, NeuralNetwork)
-on the Consumer Staples dataset (5 core companies).
-
-⚠️ This script only performs training on 80% of the data (no evaluation here).
-Evaluation is done separately in `evaluation.py`.
+on the Consumer Staples dataset with advanced features.
 
 Author: Marc Birchler
 Course: Advanced Programming - HEC Lausanne (Fall 2025)
 """
 
-# ============================
-# Imports
-# ============================
 import os
 import pandas as pd
 import numpy as np
 import joblib
-from sklearn.model_selection import train_test_split
 
-# Import model training functions
 from models.linear_model import train_linear_regression
 from models.random_forest import train_random_forest
 from models.xgboost_model import train_xgboost
 from models.neural_network import train_neural_network
 
 
-# ============================
-# Configuration
-# ============================
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 DATA_PATH = os.path.join(BASE_DIR, "processed", "combined_data.csv")
 MODEL_SAVE_DIR = os.path.join(BASE_DIR, "models", "trained")
@@ -37,11 +26,8 @@ MODEL_SAVE_DIR = os.path.join(BASE_DIR, "models", "trained")
 os.makedirs(MODEL_SAVE_DIR, exist_ok=True)
 
 
-# ============================
-# Helper functions
-# ============================
 def load_data():
-    """Load the preprocessed dataset."""
+    """Load the preprocessed dataset with advanced features."""
     if not os.path.exists(DATA_PATH):
         raise FileNotFoundError(f"❌ Data not found at {DATA_PATH}")
     df = pd.read_csv(DATA_PATH)
@@ -50,67 +36,101 @@ def load_data():
 
 
 def prepare_data(df):
-    """
-    Prepare features and target for model training.
-    Removes potential leakage (Close, Return, Weekly_Return)
-    and ensures all features are numeric and complete.
-    """
-    print("⚙️ Preparing data for training...")
-
-    # Keep relevant columns only
-    keep_cols = [
-        "Close", "Volume", "Return", "Volatility_30d",
-        "US10Y_Yield", "US_CPI", "EPS", "Net Income",
-        "Total Revenue", "Weekly_Return"
-    ]
-    df = df[[c for c in keep_cols if c in df.columns]].copy()
-
-    # Drop missing target
+    """Prepare features and target for model training."""
+    print("\n⚙️ Preparing data for training...")
+    print(f"Initial columns: {list(df.columns)}")
+    
     df = df.dropna(subset=["Weekly_Return"])
-
-    # Remove leakage columns
-    X = df.drop(columns=["Close", "Return", "Weekly_Return"], errors="ignore")
+    print(f"Removed rows with missing target. Remaining: {len(df)} rows")
+    
+    exclude_cols = ["Weekly_Return", "Close", "Return", "Date", "Ticker"]
+    X = df.drop(columns=exclude_cols, errors="ignore")
     y = df["Weekly_Return"]
+    
+    print(f"\nFeatures selected for training: {list(X.columns)}")
+    
+    # Convert all features to numeric
+    X = X.apply(pd.to_numeric, errors='coerce')
+    
+    # Handle missing and infinite values
+    print(f"🔍 Checking for missing values...")
+    missing_before = X.isnull().sum().sum()
+    print(f"   Missing before cleaning: {missing_before}")
+    
+    X = X.ffill().bfill().fillna(0)
+    
+    missing_after = X.isnull().sum().sum()
+    print(f"   Missing after cleaning: {missing_after}")
+    
+    if np.isinf(X).any().any():
+        print("⚠️ Found infinite values — replacing with 0.")
+        X = X.replace([np.inf, -np.inf], 0)
+    
+    # Split chronologically (no shuffle)
+    split_idx = int(len(X) * 0.8)
+    X_train, X_test = X.iloc[:split_idx], X.iloc[split_idx:]
+    y_train, y_test = y.iloc[:split_idx], y.iloc[split_idx:]
+    
+    print(f"\n✅ Data preparation complete.")
+    print(f"   Training set: {X_train.shape[0]} rows, {X_train.shape[1]} features")
+    print(f"   Test set: {X_test.shape[0]} rows")
+    
+    return X_train, X_test, y_train, y_test
 
-    # Ensure numeric types and handle NaNs
-    X = X.apply(pd.to_numeric, errors='coerce').ffill().bfill().fillna(0)
 
-    # Time-based split (no shuffle to avoid leakage)
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, shuffle=False
-    )
-
-    print(f"✅ Training data ready: {X_train.shape[0]} rows, {X.shape[1]} features.")
-    print(f"🧩 Features used: {list(X.columns)}")
-
-    return X_train, y_train
+def display_feature_statistics(X_train):
+    """Display basic statistics of the training features."""
+    print("\n📊 Feature Statistics (Training Set):")
+    print("=" * 80)
+    stats = X_train.describe().T[['mean', 'std', 'min', 'max']]
+    print(stats.to_string())
+    print("=" * 80)
 
 
-# ============================
-# Main training routine
-# ============================
 if __name__ == "__main__":
-    print("\n🚀 Starting training pipeline for Consumer Staples...\n")
+    print("\n" + "=" * 80)
+    print("🚀 STARTING TRAINING PIPELINE FOR CONSUMER STAPLES")
+    print("=" * 80)
 
-    # Step 1: Load preprocessed data
+    print("\nSTEP 1️⃣: Loading data...")
     df = load_data()
 
-    # Step 2: Prepare data for model training
-    X_train, y_train = prepare_data(df)
+    print("\nSTEP 2️⃣: Preparing features and target...")
+    X_train, X_test, y_train, y_test = prepare_data(df)
+    
+    display_feature_statistics(X_train)
 
-    # Step 3: Train all models
-    print("\n🧠 Training models...\n")
-    models = {
-        "LinearRegression": train_linear_regression(X_train, y_train),
-        "RandomForest": train_random_forest(X_train, y_train),
-        "XGBoost": train_xgboost(X_train, y_train),
-        "NeuralNetwork": train_neural_network(X_train, y_train)
-    }
+    print("\n" + "=" * 80)
+    print("STEP 3️⃣: Training models...")
+    print("=" * 80)
+    
+    models = {}
 
-    # Step 4: Save each trained model
+    print("\n[1/4] Training Linear Regression...")
+    models["LinearRegression"] = train_linear_regression(X_train, y_train)
+    
+    print("\n[2/4] Training Random Forest...")
+    models["RandomForest"] = train_random_forest(X_train, y_train)
+    
+    print("\n[3/4] Training XGBoost...")
+    models["XGBoost"] = train_xgboost(X_train, y_train)
+    
+    print("\n[4/4] Training Neural Network...")
+    models["NeuralNetwork"] = train_neural_network(X_train, y_train)
+
+    print("\n" + "=" * 80)
+    print("STEP 4️⃣: Saving trained models...")
+    print("=" * 80)
+    
     for name, model in models.items():
         model_path = os.path.join(MODEL_SAVE_DIR, f"{name}.pkl")
         joblib.dump(model, model_path)
-        print(f"💾 {name} saved at: {model_path}")
+        print(f"💾 Saved: {name:20s} → {model_path}")
 
-    print("\n🎯 All models trained and saved successfully!\n")
+    print("\n" + "=" * 80)
+    print("🎯 ALL MODELS TRAINED AND SAVED SUCCESSFULLY!")
+    print("=" * 80)
+    print(f"\n📂 Models saved in: {MODEL_SAVE_DIR}")
+    print(f"📈 Training samples: {len(X_train)}")
+    print(f"🧩 Features used: {X_train.shape[1]}")
+    print("\n➡️ Next step: Run `evaluation.py` to test model performance.\n")
