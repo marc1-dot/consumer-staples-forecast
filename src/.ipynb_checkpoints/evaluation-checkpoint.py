@@ -18,7 +18,6 @@ from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 
 # Configuration
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
-DATA_PATH = os.path.join(BASE_DIR, "processed", "combined_data.csv")
 MODEL_DIR = os.path.join(BASE_DIR, "models", "trained")
 RESULTS_DIR = os.path.join(BASE_DIR, "results")
 
@@ -30,28 +29,67 @@ plt.rcParams['figure.figsize'] = (12, 6)
 
 
 def load_data():
-    """Load preprocessed data and prepare train/test split."""
-    if not os.path.exists(DATA_PATH):
-        raise FileNotFoundError(f"❌ Data not found at {DATA_PATH}")
+    """Load the preprocessed and already split datasets."""
+    X_TRAIN_PATH = os.path.join(BASE_DIR, "processed", "X_train.csv")
+    X_TEST_PATH = os.path.join(BASE_DIR, "processed", "X_test.csv")
+    Y_TRAIN_PATH = os.path.join(BASE_DIR, "processed", "y_train.csv")
+    Y_TEST_PATH = os.path.join(BASE_DIR, "processed", "y_test.csv")
     
-    df = pd.read_csv(DATA_PATH)
-    df = df.dropna(subset=["Weekly_Return"])
+    if not os.path.exists(X_TRAIN_PATH):
+        raise FileNotFoundError("Data not found at {}".format(X_TRAIN_PATH))
+    if not os.path.exists(X_TEST_PATH):
+        raise FileNotFoundError("Data not found at {}".format(X_TEST_PATH))
+    if not os.path.exists(Y_TRAIN_PATH):
+        raise FileNotFoundError("Data not found at {}".format(Y_TRAIN_PATH))
+    if not os.path.exists(Y_TEST_PATH):
+        raise FileNotFoundError("Data not found at {}".format(Y_TEST_PATH))
     
-    # Exclude same columns as in training
-    exclude_cols = ["Weekly_Return", "Close", "Return", "Date", "Ticker"]
-    X = df.drop(columns=exclude_cols, errors="ignore")
-    y = df["Weekly_Return"]
+    X_train = pd.read_csv(X_TRAIN_PATH)
+    X_test = pd.read_csv(X_TEST_PATH)
+    y_train = pd.read_csv(Y_TRAIN_PATH).squeeze()
+    y_test = pd.read_csv(Y_TEST_PATH).squeeze()
     
-    X = X.apply(pd.to_numeric, errors='coerce')
-    X = X.ffill().bfill().fillna(0)
-    X = X.replace([np.inf, -np.inf], np.nan).ffill().bfill().fillna(0)
+    print("Data loaded: {} train, {} test samples.".format(len(X_train), len(X_test)))
+    return X_train, X_test, y_train, y_test
+
+
+def clean_data(X_train, X_test, y_train, y_test):
+    """Clean data: handle missing values and infinities."""
+    print("\nCleaning data...")
     
-    # Time-based split (80/20)
-    split_idx = int(len(X) * 0.8)
-    X_train, X_test = X.iloc[:split_idx], X.iloc[split_idx:]
-    y_train, y_test = y.iloc[:split_idx], y.iloc[split_idx:]
+    # Convert to numeric
+    X_train = X_train.apply(pd.to_numeric, errors='coerce')
+    X_test = X_test.apply(pd.to_numeric, errors='coerce')
     
-    print(f"✅ Data loaded: {len(X_train)} train, {len(X_test)} test samples.")
+    # Check missing values
+    missing_train_before = X_train.isnull().sum().sum()
+    missing_test_before = X_test.isnull().sum().sum()
+    print("   Missing values before cleaning:")
+    print("      X_train: {}".format(missing_train_before))
+    print("      X_test: {}".format(missing_test_before))
+    
+    # Fill missing values
+    X_train = X_train.ffill().bfill().fillna(0)
+    X_test = X_test.ffill().bfill().fillna(0)
+    
+    # Check missing values after
+    missing_train_after = X_train.isnull().sum().sum()
+    missing_test_after = X_test.isnull().sum().sum()
+    print("   Missing values after cleaning:")
+    print("      X_train: {}".format(missing_train_after))
+    print("      X_test: {}".format(missing_test_after))
+    
+    # Handle infinities
+    if np.isinf(X_train.values).any():
+        print("   Found infinite values in X_train - replacing with 0.")
+        X_train = X_train.replace([np.inf, -np.inf], 0)
+    
+    if np.isinf(X_test.values).any():
+        print("   Found infinite values in X_test - replacing with 0.")
+        X_test = X_test.replace([np.inf, -np.inf], 0)
+    
+    print("Data cleaning complete.\n")
+    
     return X_train, X_test, y_train, y_test
 
 
@@ -65,9 +103,9 @@ def load_models():
         if os.path.exists(model_path):
             model_name = model_file.replace(".pkl", "")
             models[model_name] = joblib.load(model_path)
-            print(f"✅ Loaded: {model_name}")
+            print("Loaded: {}".format(model_name))
         else:
-            print(f"⚠️ Missing: {model_file}")
+            print("Missing: {}".format(model_file))
     
     return models
 
@@ -120,7 +158,7 @@ def plot_predictions(y_test, results):
         max_val = max(y_test.max(), y_pred.max())
         ax.plot([min_val, max_val], [min_val, max_val], 'r--', lw=2)
         
-        ax.set_title(f'{model_name}\nR²={result["R2"]:.4f}, RMSE={result["RMSE"]:.5f}', fontweight='bold')
+        ax.set_title('{}\nR²={:.4f}, RMSE={:.5f}'.format(model_name, result["R2"], result["RMSE"]), fontweight='bold')
         ax.set_xlabel('Actual Weekly Return')
         ax.set_ylabel('Predicted Weekly Return')
         ax.grid(True, alpha=0.3)
@@ -128,7 +166,7 @@ def plot_predictions(y_test, results):
     plt.tight_layout()
     path = os.path.join(RESULTS_DIR, "predictions_comparison.png")
     plt.savefig(path, dpi=300, bbox_inches="tight")
-    print(f"📊 Saved plot: {path}")
+    print("Saved plot: {}".format(path))
     plt.close()
 
 
@@ -145,7 +183,7 @@ def plot_residuals(y_test, results):
 
         ax.scatter(y_pred, residuals, alpha=0.5, s=30)
         ax.axhline(0, color='r', linestyle='--', lw=2)
-        ax.set_title(f'{model_name} Residuals', fontweight='bold')
+        ax.set_title('{} Residuals'.format(model_name), fontweight='bold')
         ax.set_xlabel('Predicted Return')
         ax.set_ylabel('Residuals')
         ax.grid(True, alpha=0.3)
@@ -153,7 +191,7 @@ def plot_residuals(y_test, results):
     plt.tight_layout()
     path = os.path.join(RESULTS_DIR, "residuals_analysis.png")
     plt.savefig(path, dpi=300, bbox_inches="tight")
-    print(f"📉 Saved plot: {path}")
+    print("Saved plot: {}".format(path))
     plt.close()
 
 
@@ -187,7 +225,7 @@ def plot_metrics_comparison(results):
     plt.tight_layout()
     path = os.path.join(RESULTS_DIR, "metrics_comparison.png")
     plt.savefig(path, dpi=300, bbox_inches="tight")
-    print(f"📈 Saved plot: {path}")
+    print("Saved plot: {}".format(path))
     plt.close()
 
 
@@ -195,58 +233,63 @@ def save_results_summary(df_metrics, results):
     """Save metrics and summary text report."""
     csv_path = os.path.join(RESULTS_DIR, "model_metrics.csv")
     df_metrics.to_csv(csv_path, index=False)
-    print(f"💾 Saved metrics CSV: {csv_path}")
+    print("Saved metrics CSV: {}".format(csv_path))
 
     report_path = os.path.join(RESULTS_DIR, "evaluation_report.txt")
     with open(report_path, 'w') as f:
         f.write("=" * 80 + "\nMODEL EVALUATION REPORT\n" + "=" * 80 + "\n\n")
         f.write(df_metrics.to_string(index=False))
         f.write("\n\nBest models:\n")
-        f.write(f"  ➤ Best RMSE: {min(results, key=lambda r: r['RMSE'])['model']}\n")
-        f.write(f"  ➤ Best MAE:  {min(results, key=lambda r: r['MAE'])['model']}\n")
-        f.write(f"  ➤ Best R²:   {max(results, key=lambda r: r['R2'])['model']}\n")
-    print(f"🧾 Saved text report: {report_path}")
+        f.write("  Best RMSE: {}\n".format(min(results, key=lambda r: r['RMSE'])['model']))
+        f.write("  Best MAE:  {}\n".format(min(results, key=lambda r: r['MAE'])['model']))
+        f.write("  Best R²:   {}\n".format(max(results, key=lambda r: r['R2'])['model']))
+    print("Saved text report: {}".format(report_path))
 
 
 if __name__ == "__main__":
     print("\n" + "=" * 80)
-    print("🚀 STARTING MODEL EVALUATION")
+    print("STARTING MODEL EVALUATION")
     print("=" * 80)
 
     # Load data
+    print("\nSTEP 1: Loading data...")
     X_train, X_test, y_train, y_test = load_data()
+    
+    # Clean data
+    print("\nSTEP 2: Cleaning data...")
+    X_train, X_test, y_train, y_test = clean_data(X_train, X_test, y_train, y_test)
 
     # Load models
-    print("\nSTEP 2️⃣: Loading trained models...")
+    print("\nSTEP 3: Loading trained models...")
     models = load_models()
     if not models:
-        print("❌ No models found. Run train_all.py first.")
+        print("No models found. Run train_all.py first.")
         exit(1)
 
     # Evaluate
-    print("\nSTEP 3️⃣: Evaluating models...\n")
+    print("\nSTEP 4: Evaluating models...\n")
     results = []
     for name, model in models.items():
         result = evaluate_model(model, X_test, y_test, name)
         results.append(result)
-        print(f"{name:15s} → RMSE: {result['RMSE']:.5f} | MAE: {result['MAE']:.5f} | R²: {result['R2']:.4f}")
+        print("{:15s} -> RMSE: {:.5f} | MAE: {:.5f} | R²: {:.4f}".format(name, result['RMSE'], result['MAE'], result['R2']))
 
     # Summary
     df_metrics = create_comparison_table(results)
     print("\n" + "=" * 80)
-    print("📊 Model Performance Summary")
+    print("Model Performance Summary")
     print("=" * 80)
     print(df_metrics.to_string(index=False))
 
     # Visuals
-    print("\nSTEP 4️⃣: Generating visualizations...")
+    print("\nSTEP 5: Generating visualizations...")
     plot_predictions(y_test, results)
     plot_residuals(y_test, results)
     plot_metrics_comparison(results)
 
     # Save
-    print("\nSTEP 5️⃣: Saving results...")
+    print("\nSTEP 6: Saving results...")
     save_results_summary(df_metrics, results)
 
-    print("\n🎯 Evaluation complete. Results saved in:", RESULTS_DIR)
+    print("\nEvaluation complete. Results saved in: {}".format(RESULTS_DIR))
     print("=" * 80)
