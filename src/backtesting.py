@@ -296,39 +296,56 @@ def backtest_strategy(y_pred, y_actual, dates, transaction_cost=0.0, threshold=0
         "dates": dates,
     }
 
-
 def backtest_buy_hold(y_actual, dates, transaction_cost=0.005):
     """
     Backtest Buy & Hold strategy.
+
+    Key fix: Transaction cost applied ONCE at entry, not every week.
+
+    Args:
+        y_actual: Array of actual weekly returns
+        dates: Array of dates
+        transaction_cost: One-time entry cost (default 0.5%)
+
+    Returns:
+        Dictionary with performance metrics
     """
-    positions = np.ones(len(y_actual))
+    # Convert to numpy array
+    returns = np.array(y_actual, dtype=float)
 
-    strategy_returns = np.array(y_actual, dtype=float).copy()
-    strategy_returns -= transaction_cost  # ✅ FIX: replace strategy_returns,[object Object], -=
+    # Apply transaction cost ONLY at entry (first week)
+    returns_with_cost = returns.copy()
+    returns_with_cost[0] -= transaction_cost  # ✅ ONE-TIME COST
 
-    cumulative_returns = np.cumprod(1 + strategy_returns)
+    # Calculate cumulative returns
+    cumulative_returns = np.cumprod(1 + returns_with_cost)
 
+    # Final value
     final_value = INITIAL_CAPITAL * cumulative_returns[-1]
     total_return = (final_value - INITIAL_CAPITAL) / INITIAL_CAPITAL
 
-    mean_return = float(strategy_returns.mean())
-    std_return = float(strategy_returns.std())
+    # Performance metrics
+    mean_return = float(returns_with_cost.mean())
+    std_return = float(returns_with_cost.std())
     sharpe_ratio = (mean_return / std_return) * np.sqrt(52) if std_return > 0 else 0
 
+    # Maximum drawdown
     cumulative_max = np.maximum.accumulate(cumulative_returns)
     drawdowns = (cumulative_returns - cumulative_max) / cumulative_max
     max_drawdown = float(drawdowns.min())
 
+    # Volatility (annualized)
     volatility = std_return * np.sqrt(52)
 
-    winning_weeks = int((strategy_returns > 0).sum())
-    win_rate = winning_weeks / len(strategy_returns) if len(strategy_returns) > 0 else 0
+    # Winning weeks
+    winning_weeks = int((returns_with_cost > 0).sum())
+    win_rate = winning_weeks / len(returns_with_cost) if len(returns_with_cost) > 0 else 0
 
     return {
         "final_value": final_value,
         "total_return": total_return,
         "total_return_pct": total_return * 100,
-        "num_trades": 1,
+        "num_trades": 1,  # Buy once and hold
         "winning_trades": winning_weeks,
         "win_rate": win_rate,
         "win_rate_pct": win_rate * 100,
@@ -337,13 +354,13 @@ def backtest_buy_hold(y_actual, dates, transaction_cost=0.005):
         "max_drawdown_pct": max_drawdown * 100,
         "volatility": volatility,
         "volatility_pct": volatility * 100,
-        "total_costs": transaction_cost,
+        "total_costs": transaction_cost,  # ONE-TIME
         "total_costs_pct": transaction_cost * 100,
         "time_in_market": 1.0,
         "time_in_market_pct": 100.0,
         "cumulative_returns": cumulative_returns,
-        "strategy_returns_net": strategy_returns,
-        "positions": positions,
+        "strategy_returns_net": returns_with_cost,
+        "positions": np.ones(len(returns)),
         "dates": dates,
     }
 
