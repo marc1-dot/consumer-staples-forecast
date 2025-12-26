@@ -1,448 +1,249 @@
 """
-backtesting.py (NEURAL NETWORK VERSION)
----------------------------------------
-Backtesting with Neural Network model
-Tests 3 transaction cost scenarios: 0.0%, 0.1%, 0.5%
+backtesting.py
+--------------
+Financial Simulation Script.
+RESPONSIBILITY: Simulate trading strategies based on model predictions.
+SCENARIOS: 0.0%, 0.1%, and 0.5% transaction costs.
+OUTPUTS: Console logs, Equity Curve plot (PNG), Summary Tables (PNG).
 
 Author: Marc Birchler
 Course: Advanced Programming - HEC Lausanne (Fall 2025)
 """
 
-import os
 import sys
-import pandas as pd
+import joblib
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from pathlib import Path
-import joblib
-import warnings
 
-warnings.filterwarnings("ignore")
-
-# ============================================================================
-# CONFIGURATION
-# ============================================================================
-
+# Add parent directory to path
 BASE_DIR = Path(__file__).resolve().parent.parent
-sys.path.append(str(BASE_DIR))
+sys.path.insert(0, str(BASE_DIR))
 
-DATA_DIR = BASE_DIR / "data" / "processed"
+# Configuration
 MODEL_DIR = BASE_DIR / "trained_models"
-RESULTS_DIR = BASE_DIR / "results" / "backtest"
-RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-
-# Transaction costs to test
-TRANSACTION_COSTS = [0.0, 0.001, 0.005]  # 0%, 0.1%, 0.5%
-INITIAL_CAPITAL = 10000
+DATA_DIR = BASE_DIR / "data" / "processed"
+OUTPUT_DIR = BASE_DIR / "results" / "backtesting"
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # Set style
 sns.set_style("whitegrid")
-plt.rcParams["figure.figsize"] = (12, 8)
 
-# ============================================================================
-# LOAD DATA
-# ============================================================================
+def load_data_and_models():
+    """Load cleaned test data and trained models."""
+    print("📂 Loading data and models...")
+    
+    # 1. Load Data
+    try:
+        X_test = pd.read_csv(DATA_DIR / "X_test_clean.csv")
+        y_test = pd.read_csv(DATA_DIR / "y_test.csv").squeeze() # Return series
+    except FileNotFoundError:
+        print("❌ Error: Cleaned data not found. Run test_all.py first.")
+        sys.exit(1)
 
-print("=" * 80)
-print("BACKTESTING WITH NEURAL NETWORK - ML STRATEGY VS BUY & HOLD")
-print("=" * 80)
-print(f"BASE_DIR: {BASE_DIR}")
-
-print("\n[1/6] Loading test data...")
-
-X_test_path = DATA_DIR / "X_test.csv"
-y_test_path = DATA_DIR / "y_test.csv"
-
-if not X_test_path.exists() or not y_test_path.exists():
-    print("❌ Error: Test data not found!")
-    sys.exit(1)
-
-# Load X_test
-X_test = pd.read_csv(X_test_path)
-
-if "Date" in X_test.columns:
-    X_test = X_test.set_index("Date")
-else:
-    # ✅ FIX: replace X_test.columns,[object Object],lower()
-    first_col_lower = str(X_test.columns[0]).lower()
-    if first_col_lower in ["date", "datetime", "timestamp"]:
-        # ✅ FIX: replace X_test.columns,[object Object],
-        X_test = X_test.set_index(X_test.columns[0])
-
-print(f"   ✅ X_test loaded: {X_test.shape}")
-
-# Load y_test
-y_test = pd.read_csv(y_test_path)
-
-if "Weekly_Return" in y_test.columns:
-    y_test = y_test["Weekly_Return"]
-elif "Target" in y_test.columns:
-    y_test = y_test["Target"]
-elif y_test.shape[1] == 1:  # ✅ FIX: replace y_test.shape,[object Object],
-    y_test = y_test.iloc[:, 0]
-else:
-    print(f"⚠️  Warning: Unexpected y_test format: {list(y_test.columns)}")
-    y_test = y_test.iloc[:, 0]
-
-print(f"   ✅ y_test loaded: {y_test.shape}")
-
-# Align indices
-y_test.index = X_test.index
-print(f"   ✅ Number of weeks: {len(X_test)}")
-
-# ============================================================================
-# LOAD NEURAL NETWORK MODEL
-# ============================================================================
-
-print("\n[2/6] Loading Neural Network model...")
-
-# Try different possible filenames for Neural Network
-nn_candidates = [
-    "neuralnetwork.pkl",
-    "neural_network.pkl",
-    "NeuralNetwork.pkl",
-    "nn.pkl",
-]
-
-model = None
-model_filename = None
-
-for filename in nn_candidates:
-    model_path = MODEL_DIR / filename
-    if model_path.exists():
-        try:
-            model = joblib.load(model_path)
-            model_filename = filename
-            print(f"   ✅ Neural Network loaded: {filename}")
-            break
-        except Exception as e:
-            print(f"   ⚠️  Failed to load {filename}: {e}")
-            continue
-
-if model is None:
-    print("\n❌ Error: Neural Network model not found!")
-    print(f"   Searched in: {MODEL_DIR}")
-    print(f"   Tried filenames: {nn_candidates}")
-    print("\n💡 Available models:")
-    for f in MODEL_DIR.glob("*.pkl"):
-        print(f"   - {f.name}")
-    sys.exit(1)
-
-# ============================================================================
-# FEATURE ALIGNMENT
-# ============================================================================
-
-print("\n[2.5/6] Checking feature alignment...")
-
-if hasattr(model, "feature_names_in_"):
-    expected_features = list(model.feature_names_in_)
-    current_features = X_test.columns.tolist()
-    missing_features = set(expected_features) - set(current_features)
-    extra_features = set(current_features) - set(expected_features)
-
-    if missing_features:
-        print(f"   ⚠️  Missing features: {missing_features}")
-
-        # Try to load from full dataset
-        possible_paths = [
-            DATA_DIR / "features_engineered.csv",
-            BASE_DIR / "data" / "features_engineered.csv",
-            DATA_DIR / "full_dataset.csv",
-        ]
-
-        features_loaded = False
-        for path in possible_paths:
-            if path.exists():
-                print(f"   → Loading from: {path}")
-                df_full = pd.read_csv(path)
-
-                if "Date" in df_full.columns:
-                    df_full = df_full.set_index("Date")
-
-                for feature in missing_features:
-                    if feature in df_full.columns:
-                        X_test[feature] = df_full[feature].reindex(X_test.index).fillna(0)
-                        print(f"   ✓ Added '{feature}'")
-                        features_loaded = True
-                    else:
-                        X_test[feature] = 0
-                        print(f"   ⚠️  '{feature}' filled with 0")
-                break
-
-        if not features_loaded:
-            print("   ⚠️  Filling missing features with 0")
-            for feature in missing_features:
-                X_test[feature] = 0
-
-    if extra_features:
-        print(f"   ⚠️  Extra features (will be removed): {extra_features}")
-
-    # Reorder columns to match model
-    X_test = X_test[expected_features]
-    print(f"   ✅ Features aligned: {X_test.shape}")
-else:
-    print("   ⚠️  Model doesn't have feature_names_in_ attribute")
-
-# ============================================================================
-# GENERATE PREDICTIONS
-# ============================================================================
-
-print("\n[3/6] Generating Neural Network predictions...")
-
-try:
-    y_pred = model.predict(X_test)
-    print(f"   ✅ Predictions generated: {len(y_pred)} weeks")
-except Exception as e:
-    print(f"❌ Error during prediction: {e}")
-    sys.exit(1)
-
-# Create series
-y_pred_series = pd.Series(y_pred, index=X_test.index, name="Predicted_Return")
-y_actual_series = pd.Series(y_test.values, index=X_test.index, name="Actual_Return")
-
-# Prediction statistics
-print("\n   📊 Neural Network Prediction Statistics:")
-print(f"      Mean prediction:  {y_pred_series.mean():.6f}")
-print(f"      Std prediction:   {y_pred_series.std():.6f}")
-print(f"      Min prediction:   {y_pred_series.min():.6f}")
-print(f"      Max prediction:   {y_pred_series.max():.6f}")
-
-print("\n   📊 Actual Return Statistics:")
-print(f"      Mean actual:      {y_actual_series.mean():.6f}")
-print(f"      Std actual:       {y_actual_series.std():.6f}")
-print(f"      Min actual:       {y_actual_series.min():.6f}")
-print(f"      Max actual:       {y_actual_series.max():.6f}")
-
-# Correlation
-correlation = np.corrcoef(y_pred_series, y_actual_series)[0, 1]
-print(f"\n   📈 Prediction-Actual Correlation: {correlation:.4f}")
-
-# ============================================================================
-# BACKTESTING FUNCTIONS
-# ============================================================================
-
-def backtest_strategy(y_pred, y_actual, dates, transaction_cost=0.0, threshold=0.0):
-    """
-    Backtest Neural Network trading strategy.
-
-    Strategy:
-    - Go LONG (position=1) when predicted return > threshold
-    - Stay in CASH (position=0) when predicted return <= threshold
-    """
-    # Generate positions (1 = long, 0 = cash)
-    positions = np.where(y_pred > threshold, 1, 0)
-
-    # Calculate strategy returns (gross)
-    strategy_returns_gross = positions * y_actual
-
-    # Calculate transaction costs
-    position_changes = np.diff(positions, prepend=0)
-    trades = (position_changes != 0).astype(int)
-    transaction_costs = trades * transaction_cost
-
-    # Net returns after costs
-    strategy_returns_net = strategy_returns_gross - transaction_costs
-
-    # Cumulative returns
-    cumulative_returns = np.cumprod(1 + strategy_returns_net)
-
-    # Performance metrics
-    final_value = INITIAL_CAPITAL * cumulative_returns[-1]
-    total_return = (final_value - INITIAL_CAPITAL) / INITIAL_CAPITAL
-
-    num_trades = int(trades.sum())
-    winning_trades = int((strategy_returns_net > 0).sum())
-    win_rate = winning_trades / len(strategy_returns_net) if len(strategy_returns_net) > 0 else 0
-
-    mean_return = float(strategy_returns_net.mean())
-    std_return = float(strategy_returns_net.std())
-    sharpe_ratio = (mean_return / std_return) * np.sqrt(52) if std_return > 0 else 0
-
-    # Drawdown
-    cumulative_max = np.maximum.accumulate(cumulative_returns)
-    drawdowns = (cumulative_returns - cumulative_max) / cumulative_max
-    max_drawdown = float(drawdowns.min())
-
-    # Volatility
-    volatility = std_return * np.sqrt(52)
-
-    # Total costs
-    total_costs = float(transaction_costs.sum())
-
-    # Time in market
-    time_in_market = float(positions.sum() / len(positions))
-
-    return {
-        "final_value": final_value,
-        "total_return": total_return,
-        "total_return_pct": total_return * 100,
-        "num_trades": num_trades,
-        "winning_trades": winning_trades,
-        "win_rate": win_rate,
-        "win_rate_pct": win_rate * 100,
-        "sharpe_ratio": sharpe_ratio,
-        "max_drawdown": max_drawdown,
-        "max_drawdown_pct": max_drawdown * 100,
-        "volatility": volatility,
-        "volatility_pct": volatility * 100,
-        "total_costs": total_costs,
-        "total_costs_pct": total_costs * 100,
-        "time_in_market": time_in_market,
-        "time_in_market_pct": time_in_market * 100,
-        "cumulative_returns": cumulative_returns,
-        "strategy_returns_net": strategy_returns_net,
-        "positions": positions,
-        "dates": dates,
+    # 2. Load Models
+    model_files = {
+        "Linear Regression": "linear_regression.pkl",
+        "Random Forest": "random_forest.pkl",
+        "XGBoost": "xgboost.pkl",
+        "Neural Network": "neuralnetwork.pkl",
     }
+    
+    models = {}
+    for name, filename in model_files.items():
+        path = MODEL_DIR / filename
+        if path.exists():
+            models[name] = joblib.load(path)
+    
+    return X_test, y_test, models
 
-def backtest_buy_hold(y_actual, dates, transaction_cost=0.005):
+def calculate_metrics(equity_curve):
+    """Calculate financial metrics from an equity curve."""
+    # Convert equity curve to daily returns for metrics
+    daily_returns = equity_curve.pct_change().dropna()
+    
+    total_return = (equity_curve.iloc[-1] - 1.0) * 100
+    
+    # Sharpe Ratio (Assuming 252 trading days, risk-free rate = 0 for simplicity)
+    mean_ret = daily_returns.mean()
+    std_ret = daily_returns.std()
+    sharpe = (mean_ret / std_ret * np.sqrt(252)) if std_ret != 0 else 0
+    
+    # Max Drawdown
+    rolling_max = equity_curve.cummax()
+    drawdown = (equity_curve - rolling_max) / rolling_max
+    max_drawdown = drawdown.min() * 100
+    
+    return total_return, sharpe, max_drawdown
+
+def run_strategy(y_true, y_pred, transaction_cost=0.0):
     """
-    Backtest Buy & Hold strategy.
+    Simulate a Long/Short Strategy.
+    - If pred > 0: Long (+1)
+    - If pred < 0: Short (-1)
+    """
+    # 1. Generate Signals (-1, 0, 1)
+    signals = np.sign(y_pred)
+    signals[signals == 0] = 0 # Neutral if exact 0
+    
+    # 2. Calculate Gross Returns (Strategy matches direction of market?)
+    gross_returns = signals * y_true
+    
+    # 3. Calculate Transaction Costs
+    previous_signals = pd.Series(signals).shift(1).fillna(0)
+    turnover = np.abs(signals - previous_signals)
+    costs = turnover * transaction_cost
+    
+    # 4. Net Returns
+    net_returns = gross_returns - costs
+    
+    # 5. Build Equity Curve (Start at 1.0)
+    equity_curve = (1 + net_returns).cumprod()
+    
+    return equity_curve
 
-    Key fix: Transaction cost applied ONCE at entry, not every week.
+def print_scenario_table(results, cost_label):
+    """Pretty print a table for a specific cost scenario and return DF."""
+    df = pd.DataFrame(results).T
+    df = df.sort_values("Total Return (%)", ascending=False)
+    
+    print(f"\n💰 SCENARIO: {cost_label}")
+    print("-" * 85)
+    print(f"{'Strategy':<20} | {'Total Return':<15} | {'Sharpe Ratio':<12} | {'Max Drawdown':<12}")
+    print("-" * 85)
+    
+    for strategy, row in df.iterrows():
+        print(f"{strategy:<20} | {row['Total Return (%)']:>11.2f}%    | {row['Sharpe Ratio']:>10.2f}   | {row['Max Drawdown (%)']:>10.2f}%")
+    print("-" * 85)
+    return df
 
+def save_tables_as_image(all_scenarios_data):
+    """
+    Generates a single PNG image containing the tables for all cost scenarios.
+    
     Args:
-        y_actual: Array of actual weekly returns
-        dates: Array of dates
-        transaction_cost: One-time entry cost (default 0.5%)
-
-    Returns:
-        Dictionary with performance metrics
+        all_scenarios_data (list): List of tuples (cost_label, dataframe)
     """
-    # Convert to numpy array
-    returns = np.array(y_actual, dtype=float)
+    print(f"\n🖼️  Generating summary tables image...")
+    
+    num_scenarios = len(all_scenarios_data)
+    # Figure setup: vertical layout
+    fig, axes = plt.subplots(num_scenarios, 1, figsize=(10, 3 * num_scenarios))
+    
+    if num_scenarios == 1: axes = [axes] # Handle single case
+    
+    for i, (cost_label, df) in enumerate(all_scenarios_data):
+        ax = axes[i]
+        ax.axis('off') # Hide axis
+        
+        # Add Title
+        ax.set_title(f"SCENARIO: {cost_label}", fontsize=12, fontweight='bold', loc='center', pad=10)
+        
+        # Format Data for Display (add % signs and round)
+        display_df = df.copy()
+        display_df['Total Return (%)'] = display_df['Total Return (%)'].apply(lambda x: f"{x:.2f}%")
+        display_df['Sharpe Ratio'] = display_df['Sharpe Ratio'].apply(lambda x: f"{x:.2f}")
+        display_df['Max Drawdown (%)'] = display_df['Max Drawdown (%)'].apply(lambda x: f"{x:.2f}%")
+        
+        # Reset index to make 'Strategy' a column
+        display_df = display_df.reset_index().rename(columns={'index': 'Strategy'})
+        
+        # Create Table
+        table = ax.table(
+            cellText=display_df.values,
+            colLabels=display_df.columns,
+            cellLoc='center',
+            loc='center',
+            colColours=["#f2f2f2"] * len(display_df.columns) # Light gray header
+        )
+        
+        # Styling
+        table.auto_set_font_size(False)
+        table.set_fontsize(10)
+        table.scale(1, 1.5) # Increase row height
+        
+        # Make header bold (optional manual tweak, hard in matplotlib simple table)
+        
+    plt.tight_layout()
+    output_path = OUTPUT_DIR / "backtest_summary_tables.png"
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"✅ Saved tables to: {output_path}")
 
-    # Apply transaction cost ONLY at entry (first week)
-    returns_with_cost = returns.copy()
-    returns_with_cost[0] -= transaction_cost  # ✅ ONE-TIME COST
+def main():
+    print("\n" + "="*85)
+    print("🚀 BACKTESTING SIMULATION")
+    print("="*85)
 
-    # Calculate cumulative returns
-    cumulative_returns = np.cumprod(1 + returns_with_cost)
-
-    # Final value
-    final_value = INITIAL_CAPITAL * cumulative_returns[-1]
-    total_return = (final_value - INITIAL_CAPITAL) / INITIAL_CAPITAL
-
-    # Performance metrics
-    mean_return = float(returns_with_cost.mean())
-    std_return = float(returns_with_cost.std())
-    sharpe_ratio = (mean_return / std_return) * np.sqrt(52) if std_return > 0 else 0
-
-    # Maximum drawdown
-    cumulative_max = np.maximum.accumulate(cumulative_returns)
-    drawdowns = (cumulative_returns - cumulative_max) / cumulative_max
-    max_drawdown = float(drawdowns.min())
-
-    # Volatility (annualized)
-    volatility = std_return * np.sqrt(52)
-
-    # Winning weeks
-    winning_weeks = int((returns_with_cost > 0).sum())
-    win_rate = winning_weeks / len(returns_with_cost) if len(returns_with_cost) > 0 else 0
-
-    return {
-        "final_value": final_value,
-        "total_return": total_return,
-        "total_return_pct": total_return * 100,
-        "num_trades": 1,  # Buy once and hold
-        "winning_trades": winning_weeks,
-        "win_rate": win_rate,
-        "win_rate_pct": win_rate * 100,
-        "sharpe_ratio": sharpe_ratio,
-        "max_drawdown": max_drawdown,
-        "max_drawdown_pct": max_drawdown * 100,
-        "volatility": volatility,
-        "volatility_pct": volatility * 100,
-        "total_costs": transaction_cost,  # ONE-TIME
-        "total_costs_pct": transaction_cost * 100,
-        "time_in_market": 1.0,
-        "time_in_market_pct": 100.0,
-        "cumulative_returns": cumulative_returns,
-        "strategy_returns_net": returns_with_cost,
-        "positions": np.ones(len(returns)),
-        "dates": dates,
+    X_test, y_test, models = load_data_and_models()
+    
+    # Define Buy & Hold Baseline
+    bnh_equity = (1 + y_test).cumprod()
+    bnh_tot, bnh_sharpe, bnh_dd = calculate_metrics(bnh_equity)
+    
+    baseline_metrics = {
+        "Total Return (%)": bnh_tot,
+        "Sharpe Ratio": bnh_sharpe,
+        "Max Drawdown (%)": bnh_dd
     }
 
-# ============================================================================
-# RUN BACKTESTS
-# ============================================================================
+    costs = [0.0, 0.001, 0.005] # 0%, 0.1%, 0.5%
+    equity_curves_mid_cost = {} # To store 0.1% curves for plotting
+    
+    # Store dataframes for the image generation
+    all_scenarios_data = []
 
-print("\n[4/6] Running backtests with Neural Network...")
+    for cost in costs:
+        cost_label = f"Transaction Cost: {cost*100:.1f}%"
+        scenario_results = {}
+        
+        # Add Buy & Hold
+        scenario_results["Buy & Hold"] = baseline_metrics
 
-nn_results = {}
+        for name, model in models.items():
+            y_pred = model.predict(X_test)
+            equity = run_strategy(y_test, y_pred, transaction_cost=cost)
+            
+            tot, sharpe, dd = calculate_metrics(equity)
+            scenario_results[name] = {
+                "Total Return (%)": tot,
+                "Sharpe Ratio": sharpe,
+                "Max Drawdown (%)": dd
+            }
+            
+            # Save for plotting (only for the realistic 0.1% case)
+            if cost == 0.001:
+                equity_curves_mid_cost[name] = equity
 
-for tc in TRANSACTION_COSTS:
-    strategy_name = f"NN_{tc*100:.1f}%"
-    print(f"   → {strategy_name} (Transaction cost: {tc*100:.1f}%)")
-    nn_results[strategy_name] = backtest_strategy(
-        y_pred,
-        y_actual_series.values,
-        X_test.index,
-        transaction_cost=tc,
-    )
+        # Print Table and collect DF
+        df_results = print_scenario_table(scenario_results, cost_label)
+        all_scenarios_data.append((cost_label, df_results))
 
-print("   → Buy & Hold (Transaction cost: 0.5%)")
-buy_hold_result = backtest_buy_hold(y_actual_series.values, X_test.index)
+    # --- SAVE TABLES IMAGE ---
+    save_tables_as_image(all_scenarios_data)
 
-print("   ✅ All backtests completed")
+    # --- PLOTTING (Based on 0.1% Cost) ---
+    print(f"\n📈 Generating equity curve plot (Cost = 0.1%)...")
+    plt.figure(figsize=(12, 7))
+    
+    # Plot Buy & Hold
+    plt.plot(bnh_equity.values, label="Buy & Hold", color="black", linestyle="--", linewidth=2, alpha=0.7)
+    
+    # Plot Models
+    for name, equity in equity_curves_mid_cost.items():
+        plt.plot(equity.values, label=name, linewidth=1.5)
 
-# ============================================================================
-# CREATE COMPARISONS
-# ============================================================================
+    plt.title("Cumulative Performance (Transaction Cost = 0.1%)", fontsize=14, fontweight='bold')
+    plt.ylabel("Portfolio Value (Start = 1.0)")
+    plt.xlabel("Test Set Period (Days)")
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    
+    plot_path = OUTPUT_DIR / "equity_curves_0.1pct_cost.png"
+    plt.savefig(plot_path, dpi=300)
+    print(f"✅ Saved plot to: {plot_path}")
 
-print("\n[5/6] Creating performance comparisons...")
-
-all_comparisons = []
-
-for nn_name, nn_result in nn_results.items():
-    comparison = {
-        "Strategy": nn_name,
-        "Model": "Neural Network",
-        "Transaction_Cost": nn_name.split("_")[1],  # ✅ FIX: replace nn_name.split("_"),[object Object],,
-        "Final_Value": nn_result["final_value"],
-        "Total_Return_pct": nn_result["total_return_pct"],
-        "Sharpe_Ratio": nn_result["sharpe_ratio"],
-        "Max_Drawdown_pct": nn_result["max_drawdown_pct"],
-        "Num_Trades": nn_result["num_trades"],
-        "Win_Rate_pct": nn_result["win_rate_pct"],
-        "Volatility_pct": nn_result["volatility_pct"],
-        "Time_in_Market_pct": nn_result["time_in_market_pct"],
-        "Total_Costs_pct": nn_result["total_costs_pct"],
-    }
-    all_comparisons.append(comparison)
-
-# Add Buy & Hold
-all_comparisons.append(
-    {
-        "Strategy": "Buy & Hold",
-        "Model": "Benchmark",
-        "Transaction_Cost": "0.5%",
-        "Final_Value": buy_hold_result["final_value"],
-        "Total_Return_pct": buy_hold_result["total_return_pct"],
-        "Sharpe_Ratio": buy_hold_result["sharpe_ratio"],
-        "Max_Drawdown_pct": buy_hold_result["max_drawdown_pct"],
-        "Num_Trades": buy_hold_result["num_trades"],
-        "Win_Rate_pct": buy_hold_result["win_rate_pct"],
-        "Volatility_pct": buy_hold_result["volatility_pct"],
-        "Time_in_Market_pct": buy_hold_result["time_in_market_pct"],
-        "Total_Costs_pct": buy_hold_result["total_costs_pct"],
-    }
-)
-
-comparison_df = pd.DataFrame(all_comparisons)
-comparison_path = RESULTS_DIR / "nn_backtest_results.csv"
-comparison_df.to_csv(comparison_path, index=False)
-print(f"   ✅ Results saved: {comparison_path}")
-
-# ============================================================================
-# VISUALIZATIONS (placeholder as in your file)
-# ============================================================================
-
-print("\n[6/6] Creating visualizations...")
-# [Continue with all the visualization code from the previous version]
-# ... (same as before)
-
-print("\n" + "=" * 80)
-print("✅ NEURAL NETWORK BACKTEST COMPLETED!")
-print("=" * 80)
+if __name__ == "__main__":
+    main()

@@ -1,11 +1,11 @@
 """
 xgboost_model.py
 ----------------
-XGBoost Regressor implementation with regularization.
+XGBoost Regressor implementation with regularization and early stopping.
+FIX: Compatible with newer XGBoost versions (early_stopping_rounds in constructor).
 
 Author: Marc Birchler
 Course: Advanced Programming - HEC Lausanne (Fall 2025)
-Date: December 2024
 """
 
 import xgboost as xgb
@@ -15,12 +15,13 @@ import numpy as np
 def train_xgboost(X_train, y_train, X_val=None, y_val=None):
     """
     Train XGBoost Regressor with regularization to prevent overfitting.
+    Includes Early Stopping.
 
     Args:
-        X_train: Training features (DataFrame or array)
-        y_train: Training target (Series or array)
-        X_val: Validation features (optional)
-        y_val: Validation target (optional)
+        X_train: Training features
+        y_train: Training target
+        X_val: Validation features (Required for early stopping)
+        y_val: Validation target (Required for early stopping)
 
     Returns:
         Trained XGBoost model
@@ -30,48 +31,44 @@ def train_xgboost(X_train, y_train, X_val=None, y_val=None):
 
     print("Training XGBoost Regressor with regularization...")
     print(f"   📊 Training data: {n_samples} samples, {n_features} features")
-    print("   🔧 Parameters:")
-    print("      - n_estimators: 1000")
-    print("      - learning_rate: 0.05")
-    print("      - max_depth: 4")
-    print("      - min_child_weight: 3")
-    print("      - subsample: 0.8")
-    print("      - colsample_bytree: 0.8")
-    print("      - reg_alpha (L1): 0.1")
-    print("      - reg_lambda (L2): 1.0")
-    print("      - gamma: 0.1")
 
-    # ✅ Classic XGBoost model (compatible with all versions)
+    # ==========================================================================
+    # FIX FOR NEWER XGBOOST VERSIONS:
+    # 'early_stopping_rounds' is now defined here, not in .fit()
+    # ==========================================================================
+    early_stop = 50 if (X_val is not None and y_val is not None) else None
+
+    # Model Configuration
     model = xgb.XGBRegressor(
-        n_estimators=1000,
-        learning_rate=0.05,
-        max_depth=4,
-        min_child_weight=3,
-        subsample=0.8,
-        colsample_bytree=0.8,
-        reg_alpha=0.1,
-        reg_lambda=1.0,
-        gamma=0.1,
+        n_estimators=1000,        # Maximum number of trees
+        learning_rate=0.05,       # Slower learning for better generalization
+        max_depth=4,              # Shallow trees to prevent overfitting
+        min_child_weight=3,       # High weight to avoid isolating noise
+        subsample=0.8,            # Use 80% of data per tree
+        colsample_bytree=0.8,     # Use 80% of features per tree
+        reg_alpha=0.1,            # L1 Regularization (Lasso)
+        reg_lambda=1.0,           # L2 Regularization (Ridge)
+        gamma=0.1,                # Minimum loss reduction required
         random_state=42,
-        n_jobs=-1
+        n_jobs=-1,
+        early_stopping_rounds=early_stop  # ✅ MOVED HERE (Constructor)
     )
 
     # Train with validation set if provided
     if X_val is not None and y_val is not None:
         n_val = X_val.shape[0]
         print(f"   📊 Validation data: {n_val} samples")
-        print("   ⏱️  Early stopping: 50 rounds")
+        print("   ⏱️  Early stopping enabled: Stops if no improvement for 50 rounds")
 
-        # Note: early stopping itself only happens if early_stopping_rounds is provided.
-        # Here we keep your behavior: eval_set monitoring without necessarily stopping.
         model.fit(
             X_train,
             y_train,
             eval_set=[(X_train, y_train), (X_val, y_val)],
             verbose=False
+            # ❌ REMOVED: early_stopping_rounds=50 (caused the error)
         )
 
-        # Try to get best iteration info (if available)
+        # Retrieve performance metrics
         try:
             if hasattr(model, "best_iteration") and model.best_iteration is not None:
                 print(f"   ✅ Best iteration: {model.best_iteration}")
@@ -81,7 +78,7 @@ def train_xgboost(X_train, y_train, X_val=None, y_val=None):
             pass
 
     else:
-        # Train without validation
+        # Train without validation (Not recommended for this project)
         print("   ⚠️  No validation set provided - training without early stopping")
         model.fit(X_train, y_train, verbose=False)
 
@@ -92,14 +89,6 @@ def train_xgboost(X_train, y_train, X_val=None, y_val=None):
 def get_feature_importance(model, feature_names=None):
     """
     Get feature importance from trained XGBoost model.
-
-    Args:
-        model: Trained XGBoost model
-        feature_names: List of feature names (optional)
-
-    Returns:
-        - If feature_names provided: dict {feature: importance} sorted desc
-        - Else: numpy array of importances
     """
     importance = model.feature_importances_
 
