@@ -36,7 +36,6 @@ The project follows academic best practices for **time-series modeling**, **data
 - **Disk Space**: ~500MB for data and results
 
 ### Core Dependencies
-```text
 pandas==2.3.2
 numpy==2.3.2
 scikit-learn==1.7.1
@@ -46,85 +45,91 @@ scipy==1.16.1
 seaborn==0.13.2
 yfinance
 
-Repository Structure
+---
+
+## 📁 Repository Structure
 
 consumer-staples-forecasting/
 │
 ├── data/                                    # Data directory
 │   ├── raw/                                 # Raw downloaded data
-│   │   └── consumer_staples_data.csv
+│   │   └── consumer_staples_data.csv        # Original dataset
 │   └── processed/                           # Processed splits
 │       ├── train.csv                        # Training set (70%)
 │       ├── validation.csv                   # Validation set (20%)
 │       └── test.csv                         # Test set (10%)
 │
 ├── src/                                     # Source code
-│   ├── data_loader.py                       # Step 1: Data acquisition
-│   ├── preprocessing.py                     # Step 2: Cleaning & Engineering
-│   ├── create_train_validation_test_split.py # Step 3: Temporal split
-│   ├── model_evaluate.py                    # Step 4: Initial evaluation
-│   ├── train_all.py                         # Step 5: Model training
-│   ├── test_all.py                          # Step 6: Final testing
-│   ├── feature_importance.py                # Step 7: Feature analysis
-│   ├── backtesting.py                       # Step 8: Backtesting strategies
-│   ├── monte_carlo.py                       # Step 9: Risk simulation
-│   ├── linear_regression_model.py           # Model class
-│   ├── neural_network_model.py              # Model class
-│   ├── random_forest_model.py               # Model class
-│   └── xgboost_model.py                     # Model class
+│   ├── download_data.py                     # Step 1: Data acquisition
+│   ├── create_train_validation_test_split.py # Step 2: Temporal split
+│   ├── train_all.py                         # Step 3: Model training
+│   ├── test_all.py                          # Step 4: Model evaluation
+│   ├── backtesting.py                       # Step 5: Backtesting
+│   ├── monte_carlo.py                       # Step 6: Monte Carlo simulations
+│   ├── linear_regression_model.py           # Linear Regression implementation
+│   ├── neural_network_model.py              # Neural Network implementation
+│   ├── random_forest_model.py               # Random Forest implementation
+│   └── xgboost_model.py                     # XGBoost implementation
 │
 ├── results/                                 # Generated outputs
 │   ├── models/                              # Trained models (.pkl)
+│   │   ├── linear_regression_model.pkl
+│   │   ├── neural_network_model.pkl
+│   │   ├── random_forest_model.pkl
+│   │   └── xgboost_model.pkl
 │   ├── figures/                             # Visualizations (.png)
-│   └── metrics/                             # Performance metrics (.csv)
+│   │   ├── backtesting_comparison_*.png     # Backtesting results
+│   │   ├── monte_carlo_*.png                # Monte Carlo histograms
+│   │   ├── model_residuals.png              # Residual analysis
+│   │   └── r2_comparison.png                # Model performance
+│   └── metrics/                             # Performance metrics
+│       └── test_performance.csv             # Test set metrics
 │
 ├── environment.yml                          # Conda environment specification
 ├── requirements.txt                         # pip dependencies
 └── README.md                                # This file
 
-Setup & Installation
+
+---
+
+## 🚀 Setup & Installation
+
+### Option 1: Conda (Recommended)
+
+```bash
+conda env create -f environment.yml
+conda activate consumer-staples-forecast
+python -c "import xgboost; print(f'XGBoost version: {xgboost.__version__}')"
 
 python -m venv venv
-# On Windows:
-venv\Scripts\activate
-# On Mac/Linux:
 source venv/bin/activate
-
 pip install -r requirements.txt
 
-
-🎬 Execution Instructions⚠️ Please run the scripts in the following exact order:1. Data Pipeline
+Run scripts in this exact order:Step 1: Download Data
 
 cd src
-
-# 1. Download raw data
 python data_loader.py
 
-# 2. Preprocess data (cleaning & feature engineering)
-python preprocessing.py
+cd src
+python prepreocessing.py
 
-# 3. Create temporal splits (Train/Validation/Test)
-# Handles look-ahead bias correction.
+cd src
 python create_train_validation_test_split.py
 
-2. Modeling & Training
-
-# 4. Evaluate baseline/pre-training metrics
+cd src
 python model_evaluate.py
 
-# 5. Train all models (LR, NN, RF, XGB)
+cd src
 python train_all.py
 
-# 6. Test models on the unseen Test set
-python test_all.py
+cd src
+python test_all
 
-# 7. Analyze Feature Importance
+cd src
 python feature_importance.py
 
-3. Economic Analysis
-
-# 8. Run Backtesting (Long/Short vs Buy & Hold)
+cd src
 python backtesting.py
 
-# 9. Run Monte Carlo Simulations (Risk Analysis)
+cd src
 python monte_carlo.py

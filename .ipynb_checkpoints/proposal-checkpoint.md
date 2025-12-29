@@ -7,7 +7,7 @@
  beverages, and household products, represents one of the most stable and resilient segments of the
  global economy. Because demand for these products remains steady across business cycles, this
  sector provides a robust framework for modeling long-term financial and market dynamics.
- The objective of this project is to **forecast the weekly return** of major consumer
+ The objective of this project is to **forecast the future revenues and stock prices** of major consumer
  staples companies by analyzing their **historical financial indicators** (revenue growth, operating
  margins, and earnings per share). Additionally, this project aims to determine **which machine learning
  model provides the most accurate predictive performance** for financial markets within the consumer
