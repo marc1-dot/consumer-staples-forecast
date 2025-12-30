@@ -21,7 +21,7 @@ The project follows academic best practices for **time-series modeling**, **data
 2. Clean and preprocess financial time-series data.
 3. Engineer predictive features suitable for return forecasting.
 4. Train multiple machine learning models (Linear Regression, Neural Network, Random Forest, XGBoost).
-5. Evaluate models using a strict temporal train/validation/test split (70%/20%/10%).
+5. Evaluate models using a strict temporal train/validation/test split (**70% Train / 20% Validation / 10% Test**).
 6. Backtest trading strategies based on model predictions.
 7. Assess robustness using Monte Carlo simulations.
 
@@ -36,6 +36,7 @@ The project follows academic best practices for **time-series modeling**, **data
 - **Disk Space**: ~500MB for data and results
 
 ### Core Dependencies
+```text
 pandas==2.3.2
 numpy==2.3.2
 scikit-learn==1.7.1
@@ -45,91 +46,70 @@ scipy==1.16.1
 seaborn==0.13.2
 yfinance
 
----
+##📁 Repository Structure
 
-## 📁 Repository Structure
-
+    
 consumer-staples-forecasting/
 │
+├── main.py                                  # MAIN ENTRY POINT (Runs full pipeline)
 ├── data/                                    # Data directory
 │   ├── raw/                                 # Raw downloaded data
-│   │   └── consumer_staples_data.csv        # Original dataset
+│   │   └── consumer_staples_data.csv
 │   └── processed/                           # Processed splits
 │       ├── train.csv                        # Training set (70%)
 │       ├── validation.csv                   # Validation set (20%)
 │       └── test.csv                         # Test set (10%)
 │
 ├── src/                                     # Source code
-│   ├── download_data.py                     # Step 1: Data acquisition
-│   ├── create_train_validation_test_split.py # Step 2: Temporal split
-│   ├── train_all.py                         # Step 3: Model training
-│   ├── test_all.py                          # Step 4: Model evaluation
-│   ├── backtesting.py                       # Step 5: Backtesting
-│   ├── monte_carlo.py                       # Step 6: Monte Carlo simulations
-│   ├── linear_regression_model.py           # Linear Regression implementation
-│   ├── neural_network_model.py              # Neural Network implementation
-│   ├── random_forest_model.py               # Random Forest implementation
-│   └── xgboost_model.py                     # XGBoost implementation
+│   ├── __init__.py
+│   ├── data_loader.py                       # Step 1: Data acquisition
+│   ├── preprocessing.py                     # Step 2: Cleaning & Engineering
+│   ├── create_train_validation_test_split.py# Step 3: Temporal split + look ahead biais
+│   ├── models/
+│   │   ├── __init__.py
+│   │   ├── linear_model.py
+│   │   ├── neural_network.py
+│   │   ├── random_forest.py
+│   │   ├── xgboost_model.py
+│   ├── model_evaluate.py                    # Step 4: Initial evaluation
+│   ├── train_all.py                         # Step 5: Model training
+│   ├── test_all.py                          # Step 6: Final testing
+│   ├── feature_importance.py                # Step 7: Feature analysis
+│   ├── backtesting.py                       # Step 8: Backtesting strategies
+│   ├── monte_carlo.py                       # Step 9: Risk simulation
+│   ├── linear_regression_model.py           # Model class
+│   ├── neural_network_model.py              # Model class
+│   ├── random_forest_model.py               # Model class
+│   └── xgboost_model.py                     # Model class
 │
 ├── results/                                 # Generated outputs
 │   ├── models/                              # Trained models (.pkl)
-│   │   ├── linear_regression_model.pkl
-│   │   ├── neural_network_model.pkl
-│   │   ├── random_forest_model.pkl
-│   │   └── xgboost_model.pkl
 │   ├── figures/                             # Visualizations (.png)
-│   │   ├── backtesting_comparison_*.png     # Backtesting results
-│   │   ├── monte_carlo_*.png                # Monte Carlo histograms
-│   │   ├── model_residuals.png              # Residual analysis
-│   │   └── r2_comparison.png                # Model performance
-│   └── metrics/                             # Performance metrics
-│       └── test_performance.csv             # Test set metrics
+│   └── metrics/                             # Performance metrics (.csv)
 │
 ├── environment.yml                          # Conda environment specification
 ├── requirements.txt                         # pip dependencies
 └── README.md                                # This file
 
 
----
+##🚀 Setup & Installation
 
-## 🚀 Setup & Installation
+## Installation
 
-### Option 1: Conda (Recommended)
+To set up the environment, run the following commands:
 
-```bash
-conda env create -f environment.yml
-conda activate consumer-staples-forecast
-python -c "import xgboost; print(f'XGBoost version: {xgboost.__version__}')"
+conda env create 
+-f environment.yml -n consumer-staples-forecast
 
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
+##🎬 Execution Instructions
 
-Run scripts in this exact order:Step 1: Download Data
+python main.py
 
-cd src
-python data_loader.py
 
-cd src
-python prepreocessing.py
+##📊 Expected OutputsAfter running the pipeline, check the results/ folder:
+Models: 4 .pkl files in results/models/
+Metrics: test_performance.csv (Neural Network is expected to have the highest R² ~0.138)
+Figures: Backtesting charts, Monte Carlo histograms, and feature importance plots in results/figures/
 
-cd src
-python create_train_validation_test_split.py
-
-cd src
-python model_evaluate.py
-
-cd src
-python train_all.py
-
-cd src
-python test_all
-
-cd src
-python feature_importance.py
-
-cd src
-python backtesting.py
-
-cd src
-python monte_carlo.py
+📄 LicenseAcademic project for Advanced Programming - HEC Lausanne (Fall 2025).
+Data sourced from Yahoo Finance.

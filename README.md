@@ -21,7 +21,7 @@ The project follows academic best practices for **time-series modeling**, **data
 2. Clean and preprocess financial time-series data.
 3. Engineer predictive features suitable for return forecasting.
 4. Train multiple machine learning models (Linear Regression, Neural Network, Random Forest, XGBoost).
-5. Evaluate models using a strict temporal train/validation/test split (70%/20%/10%).
+5. Evaluate models using a strict temporal train/validation/test split (**70% Train / 20% Validation / 10% Test**).
 6. Backtest trading strategies based on model predictions.
 7. Assess robustness using Monte Carlo simulations.
 
@@ -46,10 +46,12 @@ scipy==1.16.1
 seaborn==0.13.2
 yfinance
 
-Repository Structure
+##📁 Repository Structure
 
+    
 consumer-staples-forecasting/
 │
+├── main.py                                  # MAIN ENTRY POINT (Runs full pipeline)
 ├── data/                                    # Data directory
 │   ├── raw/                                 # Raw downloaded data
 │   │   └── consumer_staples_data.csv
@@ -59,9 +61,16 @@ consumer-staples-forecasting/
 │       └── test.csv                         # Test set (10%)
 │
 ├── src/                                     # Source code
+│   ├── __init__.py
 │   ├── data_loader.py                       # Step 1: Data acquisition
 │   ├── preprocessing.py                     # Step 2: Cleaning & Engineering
-│   ├── create_train_validation_test_split.py # Step 3: Temporal split
+│   ├── create_train_validation_test_split.py# Step 3: Temporal split + look ahead biais
+│   ├── models/
+│   │   ├── __init__.py
+│   │   ├── linear_model.py
+│   │   ├── neural_network.py
+│   │   ├── random_forest.py
+│   │   ├── xgboost_model.py
 │   ├── model_evaluate.py                    # Step 4: Initial evaluation
 │   ├── train_all.py                         # Step 5: Model training
 │   ├── test_all.py                          # Step 6: Final testing
@@ -82,49 +91,25 @@ consumer-staples-forecasting/
 ├── requirements.txt                         # pip dependencies
 └── README.md                                # This file
 
-Setup & Installation
 
-python -m venv venv
-# On Windows:
-venv\Scripts\activate
-# On Mac/Linux:
-source venv/bin/activate
+##🚀 Setup & Installation
 
-pip install -r requirements.txt
+## Installation
+
+To set up the environment, run the following commands:
+
+conda env create 
+-f environment.yml -n consumer-staples-forecast
+
+##🎬 Execution Instructions
+
+python main.py
 
 
-🎬 Execution Instructions⚠️ Please run the scripts in the following exact order:1. Data Pipeline
+##📊 Expected OutputsAfter running the pipeline, check the results/ folder:
+Models: 4 .pkl files in results/models/
+Metrics: test_performance.csv (Neural Network is expected to have the highest R² ~0.138)
+Figures: Backtesting charts, Monte Carlo histograms, and feature importance plots in results/figures/
 
-cd src
-
-# 1. Download raw data
-python data_loader.py
-
-# 2. Preprocess data (cleaning & feature engineering)
-python preprocessing.py
-
-# 3. Create temporal splits (Train/Validation/Test)
-# Handles look-ahead bias correction.
-python create_train_validation_test_split.py
-
-2. Modeling & Training
-
-# 4. Evaluate baseline/pre-training metrics
-python model_evaluate.py
-
-# 5. Train all models (LR, NN, RF, XGB)
-python train_all.py
-
-# 6. Test models on the unseen Test set
-python test_all.py
-
-# 7. Analyze Feature Importance
-python feature_importance.py
-
-3. Economic Analysis
-
-# 8. Run Backtesting (Long/Short vs Buy & Hold)
-python backtesting.py
-
-# 9. Run Monte Carlo Simulations (Risk Analysis)
-python monte_carlo.py
+📄 LicenseAcademic project for Advanced Programming - HEC Lausanne (Fall 2025).
+Data sourced from Yahoo Finance.
