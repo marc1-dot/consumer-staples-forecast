@@ -1,7 +1,7 @@
 # Consumer Staples Forecasting
 
 ## 🧠 Project Overview
-This project develops a **machine learning pipeline to forecast weekly stock returns** and evaluate **trading strategies** in the **Consumer Staples sector**.
+This project develops a **machine learning pipeline to forecast weekly stock returns** and evaluate **which model is the most tailored** for the **Consumer Staples sector**.
 
 The analysis focuses on five major publicly traded companies:
 - **Nestlé (NESN.SW)**
