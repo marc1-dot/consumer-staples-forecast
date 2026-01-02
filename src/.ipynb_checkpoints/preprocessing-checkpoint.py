@@ -176,7 +176,6 @@ def calculate_rsi(series: pd.Series, period: int = 14) -> pd.Series:
 def create_advanced_features(df: pd.DataFrame) -> pd.DataFrame:
     """
     Crée des features financières, techniques, volatilité, et macro-dérivées.
-    (Le contenu suit ton pipeline existant.)
     """
     df = df.sort_values("Date").copy()
 

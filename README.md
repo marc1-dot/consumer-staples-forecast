@@ -90,6 +90,7 @@ consumer-staples-forecasting/
 ├── environment.yml                          # Conda environment specification
 ├── requirements.txt                         # pip dependencies
 └── README.md                                # This file
+└── AI_USAGE.md                              #Describe the main AI Usage 
 
 
 ##🚀 Setup & Installation
@@ -98,8 +99,7 @@ consumer-staples-forecasting/
 
 To set up the environment, run the following commands:
 
-conda env create 
--f environment.yml -n consumer-staples-forecast
+conda env create -f environment.yml -n consumer-staples-forecast
 
 ##🎬 Execution Instructions
 
